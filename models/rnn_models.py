@@ -3,34 +3,30 @@ import torch.functional as F
 import torch.nn as nn
 import torch
 
-def accuracy(outputs, labels): ## Calcular la precisión
-    _, preds = torch.max(outputs, dim=1)
-    return torch.tensor(torch.sum(preds == labels).item() / len(preds))
-    
-class MultiClassificationBase(nn.Module):
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr'] # Seguimiento del learning rate
+class RegBase(nn.Module):
     def training_step(self, batch):
-        images, labels = batch
-        out = self(images)                  # Generar predicciones
-        loss = F.cross_entropy(out, labels) # Calcular el costo
+        x_t, y_t = batch
+        out = self(x_t)                  # Generar predicciones
+        loss = F.mse_loss(out, y_t) # Calcular el costo
         return loss
 
     def validation_step(self, batch):
-        images, labels = batch
-        out = self(images)                    # Generar predicciones
-        loss = F.cross_entropy(out, labels)   # Calcular el costo
-        acc = accuracy(out, labels)           # Calcular la precisión
-        return {'val_loss': loss.detach(), 'val_acc': acc}
+        x_t, y_t = batch
+        out = self(x_t)                    # Generar predicciones
+        loss = F.mse_loss(out, y_t)   # Calcular el costo
+        return {'val_loss': loss.detach()}
 
     def validation_epoch_end(self, outputs):
         batch_losses = [x['val_loss'] for x in outputs]
         epoch_loss = torch.stack(batch_losses).mean()   # Sacar el valor expectado de todo el conjunto de costos
-        batch_accs = [x['val_acc'] for x in outputs]
-        epoch_acc = torch.stack(batch_accs).mean()      # Sacar el valor expectado de todo el conjunto de precisiones
-        return {'val_loss': epoch_loss.item(), 'val_acc': epoch_acc.item()}
+        return {'val_loss': epoch_loss.item()}
 
     def epoch_end(self, epoch, result): # Seguimiento del entrenamiento
-        print("Epoch [{}], last_lr: {:.5f}, train_loss: {:.4f}, val_loss: {:.4f}, val_acc: {:.4f}".format(
-            epoch, result['lrs'][-1], result['train_loss'], result['val_loss'], result['val_acc']))
+        print("Epoch [{}], last_lr: {:.5f}, train_loss: {:.4f}, val_loss: {:.4f}".format(
+            epoch, result['lrs'][-1], result['train_loss'], result['val_loss']))
     
     def evaluate(self, val_loader):
         self.eval()
@@ -89,7 +85,7 @@ def  SingularLayer(input_size, output):
     )
     return out
 
-class DeepNeuralNetwork(MultiClassificationBase):
+class DeepNeuralNetwork(RegBase):
     def __init__(self, input_size, output_size, *args, activation=None):
         super(DeepNeuralNetwork, self).__init__()
         
@@ -108,15 +104,13 @@ class DeepNeuralNetwork(MultiClassificationBase):
         out = self.output_layer(out)
         return out
 
-def get_lr(optimizer):
-    for param_group in optimizer.param_groups:
-        return param_group['lr'] # Seguimiento del learning rate
 
-class DeepVanillaRNN(MultiClassificationBase):
+class DeepVanillaRNN(RegBase):
     def __init__(self, hidden_size, input_size, output_size, batch_size, mlp_architecture, hidden_state = None):
         super(DeepVanillaRNN, self).__init__()
+        self.hidden_size = hidden_size
         if hidden_state is None:
-            self.hidden_state = Variable(torch.randn(1, batch_size, hidden_size))
+            self.hidden_state = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
         else:
             self.hidden_state = hidden_state
         self.hidden_mlp = DeepNeuralNetwork(hidden_size, hidden_size, mlp_architecture)
@@ -128,9 +122,10 @@ class DeepVanillaRNN(MultiClassificationBase):
         output = self.output_mlp(self.hidden_state)
         return output
 
-class DeepLSTM(MultiClassificationBase):
+class DeepLSTM(RegBase):
     def __init__(self, hidden_size, input_size, output_size, batch_size, mlp_architecture, hidden_state = None, cell_state = None):
         super(DeepLSTM, self).__init__()
+        self.hidden_size = hidden_size
         #Forget gate
         self.F_h = DeepNeuralNetwork(hidden_size, hidden_size, mlp_architecture)
         self.F_x = DeepNeuralNetwork(input_size, hidden_size, mlp_architecture)
@@ -145,32 +140,33 @@ class DeepLSTM(MultiClassificationBase):
         self.C_hat_x = DeepNeuralNetwork(input_size, hidden_size, mlp_architecture)        
         #c and H
         if hidden_state is None:
-            self.H = Variable(torch.randn(1, batch_size, hidden_size))
+            self.H = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
         else:
             self.H = hidden_state
         if cell_state is None:
-            self.C = Variable(torch.randn(1, batch_size, hidden_size))
+            self.C = torch.zeros(1, batch_size, hidden_size, requires_grad = True)
         else:
             self.C = cell_state
         #Output mlp
         self.H_h = DeepNeuralNetwork(hidden_size, output_size, mlp_architecture)
     def forward(self,x):
         self.a_F = self.F_h(self.H) + self.F_x(x)
-        self.F = nn.Sigmoid(self.a_F)
+        self.F = torch.sigmoid(self.a_F)
         self.a_I = self.I_h(self.H) + self.I_x(x)
-        self.I = nn.Sigmoid(self.a_I)
+        self.I = torch.sigmoid(self.a_I)
         self.a_O = self.O_h(self.H) + self.O_x(x)
-        self.O = nn.Sigmoid(self.a_O)
+        self.O = torch.sigmoid(self.a_O)
         self.a_C_hat = self.C_hat_h(self.H) + self.C_hat_x(x)
-        self.C_hat = nn.tanh(self.a_C_hat)
+        self.C_hat = torch.tanh(self.a_C_hat)
         self.C = self.F*self.C + self.I*self.C_hat
-        self.H = self.O*nn.tanh(self.C)
+        self.H = self.O*torch.tanh(self.C)
         output = self.H_h(self.H)
         return output, self.H, self.C
 
-class DeepGRU(MultiClassificationBase):
+class DeepGRU(RegBase):
     def __init__(self, hidden_size, input_size, output_size, batch_size, mlp_architecture, hidden_state = None):
         super(DeepGRU, self).__init__()
+        self.hidden_size = hidden_size
         #Update gate
         self.Z_h = DeepNeuralNetwork(hidden_size, hidden_size, mlp_architecture)
         self.Z_x = DeepNeuralNetwork(input_size, hidden_size, mlp_architecture)
@@ -183,18 +179,18 @@ class DeepGRU(MultiClassificationBase):
         #Hidden
         self.H_h = DeepNeuralNetwork(hidden_size, output_size, mlp_architecture)
         if hidden_state is None:
-            self.H = Variable(torch.randn(1, batch_size, hidden_size))
+            self.H = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
         else:
             self.H = hidden_state
     def forward(self, x):
-        self.Z = nn.Sigmoid(self.Z_h(self.H)+self.Z_x(x))
-        self.R = nn.Sigmoid(self.R_h(self.H)+self.R_x(x))
-        self.H_hat = nn.tanh(self.H_hat_h(self.H*self.R)+self.H_hat_x(x))
+        self.Z = torch.sigmoid(self.Z_h(self.H)+self.Z_x(x))
+        self.R = torch.sigmoid(self.R_h(self.H)+self.R_x(x))
+        self.H_hat = torch.tanh(self.H_hat_h(self.H*self.R)+self.H_hat_x(x))
         self.H = self.H*self.Z + (torch.ones_like(self.Z)-self.Z)*self.H_hat
         output = self.H_h(self.H)
         return output, self.H
 
-class DeepComplexRNN(MultiClassificationBase):
+class DeepComplexRNN(RegBase):
     def __init__(self, hidden_size, input_size, output_size, batch_size, architecture, models):
         self.models = models
         self.hidden_size = hidden_size
@@ -202,8 +198,8 @@ class DeepComplexRNN(MultiClassificationBase):
         self.output_size = output_size
         self.batch_size = batch_size
         self.architecture = architecture
-        self.H = Variable(torch.randn(1, batch_size, hidden_size))
-        self.C = Variable(torch.randn(1, batch_size, hidden_size))        
+        self.H = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
+        self.C = torch.zeros(1, batch_size, hidden_size, requires_grad=True)        
     def forward(self, x):
         for model in self.models:
             if type(model)==DeepLSTM:
