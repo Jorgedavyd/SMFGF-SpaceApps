@@ -130,3 +130,19 @@ def day_Dst(months = [str(date.today()).replace('-', '')[:6]], days = [date.toda
     series = pd.concat(data_list, axis = 0).reset_index(drop=True)
     series.name = 'Dst'
     return series
+
+def day_independent():
+    url = 'https://www.ngdc.noaa.gov/dscovr/portal/#/download/'   
+    response = requests.get(url)
+
+    # Check if the request was successful (status code 200)
+    if response.status_code == 200:
+        # Parse the data (assuming it's CSV)
+        data = response.text
+
+        soup = BeautifulSoup(data, 'html.parser')
+        data = soup.find('input', class_="form-control input-sm cursor-text")
+        with open('data/Dst_index/'+ url.split('/')[-2]+'.csv', 'w') as file:
+            file.write('\n'.join(data.text.replace('\n\n', '\n').replace('\n ','\n').split('\n')[7:39]).replace('-', ' -').replace('   ', ' ').replace('  ', ' ').replace(' ', ','))
+    else:
+        print('Unable to access the site')
