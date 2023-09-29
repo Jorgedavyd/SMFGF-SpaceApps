@@ -202,7 +202,7 @@ class DeepComplexRNN(RegBase):
         self.C = torch.zeros(1, batch_size, hidden_size, requires_grad=True)        
     def forward(self, x):
         for model in self.models:
-            if type(model)==DeepLSTM:
+            if isinstance(model, DeepLSTM):
                 model = model(self.hidden_size, self.input_size, self.output_size, self.batch_size, self.architecture, self.H, self.C)
                 output, self.H, self.C = model(x)
             else:
