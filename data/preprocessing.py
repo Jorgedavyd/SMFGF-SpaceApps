@@ -14,10 +14,9 @@ from datetime import datetime, timedelta
 #format: YYYYMMDD000000
 def import_train(scrap_date: list):
     with open('data/URLs.csv', 'r') as file:
-        line = file.readlines()
-        full_url = line[0].split(' ')
+        lines = file.readlines()
     url_list = []
-    for url in full_url:
+    for url in lines:
         for date in scrap_date:
             if date+'000000' in url:
                 url_list.append(url)
