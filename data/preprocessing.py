@@ -30,6 +30,8 @@ def gzip_to_nc():
     #defining raw data dataframes
     fc1 = []
     mg1 = []
+    f1m = []
+    m1m = []
 
     ##uncompress and save
     for file in os.listdir('data/compressed'):
@@ -37,14 +39,18 @@ def gzip_to_nc():
         file = os.path.join('data/compressed/',file)
         if 'fc1' in file:
             fc1.append(output_file)
+        elif 'f1m' in file:
+            f1m.append(output_file)
+        elif 'm1m' in file:
+            m1m.append(output_file)
         else:
             mg1.append(output_file)
         with gzip.open(file, 'rb') as compressed_file:
             with open(output_file, 'wb') as decompressed_file:
                 decompressed_file.write(compressed_file.read())
-    return fc1, mg1
+    return fc1, mg1, f1m, m1m
 
-def faraday_preprocess(dataframes):
+def l1_faraday_preprocess(dataframes):
     
     data_list = []
     
@@ -65,7 +71,7 @@ def faraday_preprocess(dataframes):
         data_list.append(faraday_cup)
     return pd.concat(data_list)
 
-def concat_magnet(dataframes):
+def l1_magnet_preprocess(dataframes):
     
     data_list = []
 
@@ -83,12 +89,48 @@ def concat_magnet(dataframes):
         data_list.append(magnetometer)
     return pd.concat(data_list)
 
-def level_1_preprocessing():
-    fc1, mg1 = gzip_to_nc()
-    faraday = faraday_preprocess(fc1)
-    magnetometer = concat_magnet(mg1)
-    return pd.concat([faraday, magnetometer], axis =1)
+def l2_faraday_preprocess(dataframes):
+    
+    data_list = []
+    
+    #cleaning data
 
+    for nc_file in dataframes: 
+
+        dataset = xr.open_dataset(nc_file)
+
+        df = dataset.to_dataframe()
+
+        important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
+
+        faraday_cup = df[important_variables]
+
+        data_list.append(faraday_cup)
+    return pd.concat(data_list)
+
+def l2_magnet_preprocess(dataframes):
+    
+    data_list = []
+
+    for nc_file in dataframes:
+        dataset = xr.open_dataset(nc_file)
+
+        df = dataset.to_dataframe()
+
+        important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
+
+        magnetometer = df[important_variables]
+
+        data_list.append(magnetometer)
+    return pd.concat(data_list)
+
+def preprocessing():
+    fc1, mg1, f1m, m1m = gzip_to_nc()
+    l1_faraday = l1_faraday_preprocess(fc1)
+    l1_magnetometer = l1_magnet_preprocess(mg1)
+    l2_faraday = l2_faraday_preprocess(f1m)
+    l2_magnetometer = l2_magnet_preprocess(m1m)
+    return pd.concat([l1_faraday, l1_magnetometer], axis =1), pd.concat([l2_faraday, l2_magnetometer], axis =1)
 
 def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
     for month in months:
