@@ -9,6 +9,7 @@ from datetime import date
 import pandas as pd
 import numpy as np
 from torchvision.datasets.utils import download_url
+from datetime import datetime, timedelta
 
 #format: YYYYMMDD000000
 def import_train(scrap_date: list):
@@ -91,19 +92,16 @@ def level_1_preprocessing():
 
 def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
     for month in months:
-        # Define the URL you want to download data from
+        # Define the URL from the kyoto Dst dataset
         if int(str(month)[:4])==int(date.today().year):
             url = f'https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/{month}/index.html'
         elif 2017<=int(str(month)[:4])<=int(date.today().year)-1:
             url = f'https://wdc.kugi.kyoto-u.ac.jp/dst_provisional/{month}/index.html'
         else:
             url = f'https://wdc.kugi.kyoto-u.ac.jp/dst_final/{month}/index.html'
-        # Send an HTTP GET request to the URL
         response = requests.get(url)
 
-        # Check if the request was successful (status code 200)
         if response.status_code == 200:
-            # Parse the data (assuming it's CSV)
             data = response.text
 
             soup = BeautifulSoup(data, 'html.parser')
@@ -112,37 +110,70 @@ def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
                 file.write('\n'.join(data.text.replace('\n\n', '\n').replace('\n ','\n').split('\n')[7:39]).replace('-', ' -').replace('   ', ' ').replace('  ', ' ').replace(' ', ','))
         else:
             print('Unable to access the site')
+
+
+def interval_time(start_date_str, end_date_str):
+    start_date = datetime.strptime(start_date_str, "%Y%m%d")
+    end_date = datetime.strptime(end_date_str, "%Y%m%d")
+
+    current_date = start_date
+    date_list = []
+
+    while current_date <= end_date:
+        date_list.append(current_date.strftime("%Y%m%d"))
+        current_date += timedelta(days=1)
+
+    return date_list
 #format: month: YYYYMM day: D for < 10 and DD for > 10.
 
-def day_Dst(months = [str(date.today()).replace('-', '')[:6]], days = [date.today().day]):
+def day_Dst(interval_time):
     data_list = []
-    for month in months:
-        for day in days:
-            today_dst = pd.read_csv(f'data/Dst_index/{month}.csv',index_col = 0, header = None).T[day]
-
-            for i,k in enumerate(today_dst):
-                if isinstance(k, str): 
-                    today_dst[i+1] = float(today_dst[i+1])
-                if np.abs(today_dst[i+1])>500:
-                    today_dst[i+1] = np.nan
-            
-            data_list.append(today_dst)
+    for day in interval_time:
+        today_dst = pd.read_csv(f'data/Dst_index/{day[:6]}.csv',index_col = 0, header = None).T[int(day[6:])]
+        for i,k in enumerate(today_dst):
+            if isinstance(k, str): 
+                today_dst[i+1] = float(today_dst[i+1])
+            if np.abs(today_dst[i+1])>500:
+                today_dst[i+1] = np.nan
+        
+        data_list.append(today_dst)
     series = pd.concat(data_list, axis = 0).reset_index(drop=True)
     series.name = 'Dst'
     return series
+def day_Kp(interval_time):
+    data_list = []
+    kp = pd.read_csv(f'data/Kp_index/data.csv',index_col = 0, header = None).T
+    for day in interval_time:
+            try:
+                today_kp = kp[day][0:8]
+            except IndexError:
+                continue
+            for i,k in enumerate(today_kp):
+                if isinstance(k, str): 
+                    today_kp[i+1] = float(today_kp[i+1])
+                if np.abs(today_kp[i+1])>9:
+                    today_kp[i+1] = np.nan
+            
+            data_list.append(today_kp)
+    series = pd.concat(data_list, axis = 0).reset_index(drop=True)
+    series.name = 'Kp'
+    return series
 
-def day_independent():
-    url = 'https://www.ngdc.noaa.gov/dscovr/portal/#/download/'   
-    response = requests.get(url)
-
-    # Check if the request was successful (status code 200)
-    if response.status_code == 200:
-        # Parse the data (assuming it's CSV)
-        data = response.text
-
-        soup = BeautifulSoup(data, 'html.parser')
-        data = soup.find('input', class_="form-control input-sm cursor-text")
-        with open('data/Dst_index/'+ url.split('/')[-2]+'.csv', 'w') as file:
-            file.write('\n'.join(data.text.replace('\n\n', '\n').replace('\n ','\n').split('\n')[7:39]).replace('-', ' -').replace('   ', ' ').replace('  ', ' ').replace(' ', ','))
-    else:
-        print('Unable to access the site')
+def day_Ap(interval_time):
+    data_list = []
+    ap = pd.read_csv(f'data/Kp_index/data.csv',index_col = 0, header = None).T
+    for day in interval_time:
+            try:
+                today_kp = ap[day][9:17]
+            except IndexError:
+                continue
+            for i,k in enumerate(today_kp):
+                if isinstance(k, str): 
+                    today_kp[i+1] = float(today_kp[i+1])
+                if np.abs(today_kp[i+1])>9:
+                    today_kp[i+1] = np.nan
+            
+            data_list.append(today_kp)
+    series = pd.concat(data_list, axis = 0).reset_index(drop=True)
+    series.name = 'ap'
+    return series
