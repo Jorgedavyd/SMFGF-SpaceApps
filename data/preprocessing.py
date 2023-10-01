@@ -218,3 +218,9 @@ def day_Ap(interval_time):
     series = pd.concat(data_list, axis = 0).reset_index(drop=True)
     series.name = 'ap'
     return series
+
+def import_targets(interval_time):
+    kp = day_Kp(interval_time)
+    ap = day_Ap(interval_time)
+    dst = day_Dst(interval_time)
+    return dst, kp, ap

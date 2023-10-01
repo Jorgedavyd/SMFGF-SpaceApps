@@ -48,7 +48,7 @@ class RefinedTrainingDataset(Dataset):
         self.dst_scaler = StandardScaler() #
         self.dst = self.dst_scaler.fit_transform(dst_series.values)
         #Kp scaler
-        self.kp = kp_series.values
+        self.kp = kp_series.apply(map_kp_index_to_interval).values
         #ap scaler
         self.ap_scaler = StandardScaler()
         self.ap = self.ap_scaler.fit_transform(ap_series.values)
@@ -81,7 +81,7 @@ class NormalTrainingDataset(Dataset):
         self.dst_scaler = StandardScaler() #
         self.dst = self.dst_scaler.fit_transform(dst_series.values)
         #Kp scaler
-        self.kp = kp_series.values
+        self.kp = kp_series.apply(map_kp_index_to_interval).values
         #ap scaler
         self.ap_scaler = StandardScaler()
         self.ap = self.ap_scaler.fit_transform(ap_series.values)
