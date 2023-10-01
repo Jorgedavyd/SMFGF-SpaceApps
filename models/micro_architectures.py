@@ -1,6 +1,27 @@
 import torch.nn as nn
 import torch
+##add attention
+class Attention(nn.Module):
+    def __init__(self, hidden_size):
+        super(Attention, self).__init__()
+        self.hidden_size = hidden_size
 
+        # Define attention layers (e.g., additive attention)
+        self.attention_layer = nn.Linear(hidden_size * 2, hidden_size)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, hidden_state, encoder_outputs):
+        # Calculate attention scores
+        attn_scores = self.attention_layer(torch.cat((hidden_state, encoder_outputs), dim=2))
+        
+        # Apply softmax to get attention weights
+        attn_weights = self.softmax(attn_scores)
+        
+        # Calculate the weighted sum of encoder outputs
+        context = torch.sum(attn_weights * encoder_outputs, dim=1)
+        
+        return context
+    
 def  SingularLayer(input_size, output):
     out = nn.Sequential(
         nn.Linear(input_size, output),
@@ -28,12 +49,12 @@ class DeepNeuralNetwork(nn.Module):
         return out
 
 class Simple1DCNN(nn.Module):
-    def __init__(self,architecture, input_channels, hidden_size, kernel_size=3, stride=2):
+    def __init__(self,architecture, input_size, hidden_size, kernel_size=3, stride=2):
         super(Simple1DCNN, self).__init__()
-        self.conv1d = nn.Conv1d(input_channels, 15, kernel_size, stride)
+        self.conv1d = nn.Conv1d(input_size, 10, kernel_size, stride)
         self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool1d(kernel_size=2, stride=2)
-        self.fc = DeepNeuralNetwork(15, hidden_size, architecture)
+        self.fc = DeepNeuralNetwork(10, hidden_size, architecture)
 
     def forward(self, x):
         x = self.conv1d(x)
@@ -114,6 +135,7 @@ class DeepGRU(nn.Module):
             self.H = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
         else:
             self.H = hidden_state
+        
     def forward(self, x):
         self.Z = torch.sigmoid(self.Z_h(self.H)+self.Z_x(x))
         self.R = torch.sigmoid(self.R_h(self.H)+self.R_x(x))
