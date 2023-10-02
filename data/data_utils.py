@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
+import numpy as np
 def min_to_hour(idx):
-    return torch.floor(idx/60)
+    return np.floor(idx/60)
 def hour_to_3_hour(idx):
-    return torch.floor(idx/3)
+    return np.floor(idx/3)
 
 def map_to_kp_index(interval):
     if interval < 0 or interval > 28:
@@ -37,7 +38,7 @@ def map_kp_index_to_interval(kp_index):
 
 #We need the pred_length to be of size divisible by 3 if possible
 class RefinedTrainingDataset(Dataset):
-    def __init__(self, l1_df, l2_df, dst_series, kp_series, ap_series, sequence_length, prediction_length, hour = False):
+    def __init__(self, l1_df, l2_df, dst_series, kp_series, sequence_length, prediction_length, hour = False):
         #l1 scaler
         self.x_scaler = StandardScaler()
         self.raw = self.x_scaler.fit_transform(l1_df.values)
@@ -46,12 +47,9 @@ class RefinedTrainingDataset(Dataset):
         self.pro = self.x_hat_scaler.fit_transform(l2_df.values)
         #dst scaler
         self.dst_scaler = StandardScaler() #
-        self.dst = self.dst_scaler.fit_transform(dst_series.values)
+        self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
         #Kp scaler
-        self.kp = kp_series.apply(map_kp_index_to_interval).values
-        #ap scaler
-        self.ap_scaler = StandardScaler()
-        self.ap = self.ap_scaler.fit_transform(ap_series.values)
+        self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
         #other parameters
         self.sequence_length = sequence_length
         self.mode = hour
@@ -64,27 +62,22 @@ class RefinedTrainingDataset(Dataset):
         if self.mode:
             dst = self.dst[idx+self.sequence_length:idx+self.sequence_length+self.pred_length]
             kp = self.kp[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)]
-            ap = self.ap[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)]
         else:
             dst = self.dst[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
             kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(min_to_hour(self.pred_length))]
-            ap = self.ap[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(min_to_hour(self.pred_length))]
         
-        return l1_sample, l2_sample, dst, kp, ap
+        return l1_sample, l2_sample, dst, kp
 
 class NormalTrainingDataset(Dataset):
-    def __init__(self, l1_df, dst_series, kp_series, ap_series, sequence_length, prediction_length, hour = False):
+    def __init__(self, l1_df, dst_series, kp_series, sequence_length, prediction_length, hour = False):
         #normalize features
         self.x_scaler = StandardScaler()
         self.features = self.x_scaler.fit_transform(l1_df.values)
         #dst scaler
         self.dst_scaler = StandardScaler() #
-        self.dst = self.dst_scaler.fit_transform(dst_series.values)
+        self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
         #Kp scaler
-        self.kp = kp_series.apply(map_kp_index_to_interval).values
-        #ap scaler
-        self.ap_scaler = StandardScaler()
-        self.ap = self.ap_scaler.fit_transform(ap_series.values)
+        self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
         #other parameters
         self.sequence_length = sequence_length
         self.mode = hour
@@ -96,11 +89,9 @@ class NormalTrainingDataset(Dataset):
         if self.mode:
             dst = self.dst[idx+self.sequence_length:idx+self.sequence_length+self.pred_length+1]
             kp = self.kp[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)+1]
-            ap = self.ap[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)+1]
         else:
             dst = self.dst[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
             kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(min_to_hour(self.pred_length))+1]
-            ap = self.ap[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(min_to_hour(self.pred_length))+1]
         
-        return feature, dst, kp, ap
+        return feature, dst, kp
     

@@ -10,9 +10,11 @@ import pandas as pd
 import numpy as np
 from torchvision.datasets.utils import download_url
 from datetime import datetime, timedelta
+import time
 
-#format: YYYYMMDD000000
-def import_train(scrap_date: list):
+def import_train(scrap_date):
+    os.makedirs('data/compressed', exist_ok=True)
+    os.makedirs('data/uncompressed', exist_ok=True)
     with open('data/URLs.csv', 'r') as file:
         lines = file.readlines()
     url_list = []
@@ -23,7 +25,142 @@ def import_train(scrap_date: list):
     for url in url_list:
         root = 'data/compressed'
         filename = url.split('_')[1] + '_'+url.split('_')[3][1:-6]+'.nc.gz'
-        download_url(url, root, filename)
+        if filename in os.listdir(root):
+            continue
+        else:
+            download_url(url, root, filename)
+
+#format: YYYYMMDD000000
+def automated_preprocessing(scrap_date: list):
+    os.makedirs('data/compressed', exist_ok=True)
+    os.makedirs('data/uncompressed', exist_ok=True)
+    os.makedirs('data/DSCOVR_L2/faraday', exist_ok=True)
+    os.makedirs('data/DSCOVR_L1/faraday', exist_ok=True)
+    os.makedirs('data/DSCOVR_L2/magnetometer', exist_ok=True)
+    os.makedirs('data/DSCOVR_L1/magnetometer', exist_ok=True)
+    with open('data/URLs.csv', 'r') as file:
+        lines = file.readlines()
+    url_list = []
+    for url in lines:
+        for date in scrap_date:
+            if date+'000000' in url:
+                url_list.append(url)
+    for url in url_list:
+        root = 'data/compressed'
+        filename = url.split('_')[1] + '_'+url.split('_')[3][1:-6]+'.nc.gz'
+        if filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L2/faraday') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L1/faraday') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L1/magnetometer') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L2/magnetometer'):
+            continue
+        elif filename[:-3] in os.listdir('data/uncompressed'):
+            output_file = os.path.join('data/uncompressed',filename)[:-3]
+            pass
+        else:
+            download_url(url, root, filename)
+            file = os.path.join(root,filename)
+            output_file = os.path.join('data/uncompressed',filename)[:-3]
+            with gzip.open(file, 'rb') as compressed_file:
+                    with open(output_file, 'wb') as decompressed_file:
+                        decompressed_file.write(compressed_file.read())
+            os.remove(file)
+        if 'fc1' in filename:
+            dataset = xr.open_dataset(output_file)
+
+            df = dataset.to_dataframe()
+
+            dataset.close()
+
+            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
+
+            faraday_cup = df[important_variables]
+
+            faraday_cup = faraday_cup.resample('1min').mean()
+
+            faraday_cup.to_csv(f'data/DSCOVR_L1/faraday/{filename[:-6]}.csv')
+
+            os.remove(output_file)
+
+        elif 'f1m' in filename:
+            dataset = xr.open_dataset(output_file)
+
+            df = dataset.to_dataframe()
+
+            dataset.close()
+
+            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
+
+            faraday_cup = df[important_variables]
+
+            faraday_cup.to_csv(f'data/DSCOVR_L2/faraday/{filename[:-6]}.csv')
+            
+            os.remove(output_file)
+        elif 'm1m' in filename:
+            dataset = xr.open_dataset(output_file)
+
+            df = dataset.to_dataframe()
+
+            dataset.close()
+
+            important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
+
+            magnetometer = df[important_variables]
+
+            magnetometer.to_csv(f'data/DSCOVR_L2/magnetometer/{filename[:-6]}.csv')
+            
+            os.remove(output_file)
+        else:
+            dataset = xr.open_dataset(output_file)
+
+            df = dataset.to_dataframe()
+
+            dataset.close()
+
+            important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
+
+            magnetometer = df[important_variables]
+
+            magnetometer = magnetometer.resample('1min').mean()
+
+            magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{filename[:-6]}.csv')
+            os.remove(output_file)
+
+    level_1, level_2 = from_csv()
+
+    dst, kp = import_targets(scrap_date)
+
+    level_1.index = pd.to_datetime(level_1.index)
+    level_2.index = pd.to_datetime(level_2.index)
+    return level_1, level_2,dst, kp
+
+def from_csv():
+    fc1_list = []
+    for file in os.listdir('data/DSCOVR_L1/faraday'):
+        file = os.path.join('data/DSCOVR_L1/faraday', file)
+        data = pd.read_csv(file, index_col=0)
+        fc1_list.append(data)
+    
+    mg1_list = []
+    for file in os.listdir('data/DSCOVR_L1/magnetometer'):
+        file = os.path.join('data/DSCOVR_L1/magnetometer', file)
+        data = pd.read_csv(file, index_col=0)
+        mg1_list.append(data)
+    
+    f1m_list = []
+    for file in os.listdir('data/DSCOVR_L2/faraday'):
+        file = os.path.join('data/DSCOVR_L2/faraday', file)
+        data = pd.read_csv(file, index_col=0)
+        f1m_list.append(data)
+    
+    m1m_list = []
+    for file in os.listdir('data/DSCOVR_L2/magnetometer'):
+        file = os.path.join('data/DSCOVR_L2/magnetometer', file)
+        data = pd.read_csv(file, index_col=0)
+        m1m_list.append(data)
+
+    fc1 = pd.concat(fc1_list)
+    mg1 = pd.concat(mg1_list)
+    f1m = pd.concat(f1m_list)
+    m1m = pd.concat(m1m_list)
+
+    return pd.concat([fc1, mg1], axis =1), pd.concat([f1m, m1m], axis =1)
 
 def gzip_to_nc():
     #defining raw data dataframes
@@ -36,6 +173,8 @@ def gzip_to_nc():
     for file in os.listdir('data/compressed'):
         output_file = os.path.join('data/uncompressed/',file[:-3]) 
         file = os.path.join('data/compressed/',file)
+        if output_file in os.listdir('data/uncompressed'):
+            continue
         if 'fc1' in file:
             fc1.append(output_file)
         elif 'f1m' in file:
@@ -67,6 +206,8 @@ def l1_faraday_preprocess(dataframes):
 
         faraday_cup = faraday_cup.resample('1min').mean()
 
+        faraday_cup.to_csv(f'data/DSCOVR_L1/faraday/{nc_file[-3]}.csv')
+
         data_list.append(faraday_cup)
     return pd.concat(data_list)
 
@@ -85,6 +226,7 @@ def l1_magnet_preprocess(dataframes):
 
         magnetometer = magnetometer.resample('1min').mean()
 
+        magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{nc_file[-3]}.csv')
         data_list.append(magnetometer)
     return pd.concat(data_list)
 
@@ -103,7 +245,7 @@ def l2_faraday_preprocess(dataframes):
         important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
 
         faraday_cup = df[important_variables]
-
+        faraday_cup.to_csv(f'data/DSCOVR_L2/faraday/{nc_file[-3]}.csv')
         data_list.append(faraday_cup)
     return pd.concat(data_list)
 
@@ -120,6 +262,8 @@ def l2_magnet_preprocess(dataframes):
 
         magnetometer = df[important_variables]
 
+        magnetometer.to_csv(f'data/DSCOVR_L2/magnetometer/{nc_file[-3]}.csv')
+        
         data_list.append(magnetometer)
     return pd.concat(data_list)
 
@@ -133,6 +277,8 @@ def preprocessing():
 
 def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
     for month in months:
+        if month+'.csv' in os.listdir('data/Dst_index'):
+            continue
         # Define the URL from the kyoto Dst dataset
         if int(str(month)[:4])==int(date.today().year):
             url = f'https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/{month}/index.html'
@@ -191,36 +337,18 @@ def day_Kp(interval_time):
                 continue
             for i,k in enumerate(today_kp):
                 if isinstance(k, str): 
-                    today_kp[i+1] = float(today_kp[i+1])
-                if np.abs(today_kp[i+1])>9:
-                    today_kp[i+1] = np.nan
+                    if np.abs(float(today_kp[i+1][0]))>9:
+                        today_kp[i+1] = np.nan
+                if isinstance(k, (int, float)):
+                    if np.abs(today_kp[i+1])>9:
+                        today_kp[i+1] = np.nan
             
             data_list.append(today_kp)
     series = pd.concat(data_list, axis = 0).reset_index(drop=True)
     series.name = 'Kp'
     return series
 
-def day_Ap(interval_time):
-    data_list = []
-    ap = pd.read_csv(f'data/Kp_index/data.csv',index_col = 0, header = None).T
-    for day in interval_time:
-            try:
-                today_kp = ap[day][9:17]
-            except IndexError:
-                continue
-            for i,k in enumerate(today_kp):
-                if isinstance(k, str): 
-                    today_kp[i+1] = float(today_kp[i+1])
-                if np.abs(today_kp[i+1])>9:
-                    today_kp[i+1] = np.nan
-            
-            data_list.append(today_kp)
-    series = pd.concat(data_list, axis = 0).reset_index(drop=True)
-    series.name = 'ap'
-    return series
-
 def import_targets(interval_time):
     kp = day_Kp(interval_time)
-    ap = day_Ap(interval_time)
     dst = day_Dst(interval_time)
-    return dst, kp, ap
+    return dst, kp

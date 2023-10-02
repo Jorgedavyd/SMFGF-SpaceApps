@@ -55,7 +55,7 @@ class Simple1DCNN(nn.Module):
         self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool1d(kernel_size=2, stride=2)
         self.fc = DeepNeuralNetwork(10, hidden_size, architecture)
-
+        ##add attention
     def forward(self, x):
         x = self.conv1d(x)
         x = self.relu(x)
@@ -74,6 +74,7 @@ class DeepVanillaRNN(nn.Module):
             self.hidden_state = hidden_state
         self.hidden_mlp = DeepNeuralNetwork(hidden_size, hidden_size, mlp_architecture)
         self.input_mlp = DeepNeuralNetwork(input_size, hidden_size, mlp_architecture)
+        ##add attention
     def forward(self,x):
         a_t = self.hidden_mlp(self.hidden_state) + self.input_mlp(x)
         self.hidden_state = torch.tanh(a_t)
@@ -104,7 +105,7 @@ class DeepLSTM(nn.Module):
             self.C = torch.zeros(1, batch_size, hidden_size, requires_grad = True)
         else:
             self.C = cell_state
-        #Output mlp
+        #add attention
     def forward(self,x):
         self.a_F = self.F_h(self.H) + self.F_x(x)
         self.F = torch.sigmoid(self.a_F)
@@ -135,10 +136,12 @@ class DeepGRU(nn.Module):
             self.H = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
         else:
             self.H = hidden_state
-        
+        #add attention
     def forward(self, x):
         self.Z = torch.sigmoid(self.Z_h(self.H)+self.Z_x(x))
         self.R = torch.sigmoid(self.R_h(self.H)+self.R_x(x))
         self.H_hat = torch.tanh(self.H_hat_h(self.H*self.R)+self.H_hat_x(x))
         self.H = self.H*self.Z + (torch.ones_like(self.Z)-self.Z)*self.H_hat
         return self.H
+    
+#Create non deep ones

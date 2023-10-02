@@ -7,40 +7,34 @@ def get_lr(optimizer):
         return param_group['lr'] # Seguimiento del learning rate
 
 class NormalArchitecture(nn.Module):
-    def __init__(self, encoder, dst, kp, ap):
+    def __init__(self, encoder, dst, kp):
         super(RefinedArchitecture, self).__init__()
         self.encoder = encoder
         self.fc_dst = dst #multiheaded neural network ##regression
         self.fc_kp = kp   #multiclass
-        self.fc_ap = ap   #regression
     def forward(self, x):
         out = self.encoder(x)
         dst_out = self.fc_dst(out)
         kp_out = self.fc_kp(out)
-        ap_out = self.fc_ap(out)
-        return dst_out, kp_out, ap_out
+        return dst_out, kp_out
     def training_step(self, batch):
         loss = 0 #initialize loss
-        feature, dst, kp, ap = batch #decompose batch
-        dst_out, kp_out, ap_out = self(feature)        
+        feature, dst, kp = batch #decompose batch
+        dst_out, kp_out = self(feature)        
         #dst index cost-1st head
         loss += F.mse_loss(dst_out, dst)
         #kp index cost - 2nd head
         loss += F.cross_entropy(kp_out, kp)
-        #ap index cost -3rd head
-        loss += F.mse_loss(ap_out, ap)
         return loss
 
     def validation_step(self, batch):
         loss = 0 #initialize loss
-        feature, dst, kp, ap = batch #decompose batch
-        dst_out, kp_out, ap_out = self(feature)        
+        feature, dst, kp = batch #decompose batch
+        dst_out, kp_out = self(feature)        
         #dst index cost-1st head
         loss += F.mse_loss(dst_out, dst)
         #kp index cost - 2nd head
         loss += F.cross_entropy(kp_out, kp)
-        #ap index cost -3rd head
-        loss += F.mse_loss(ap_out, ap)
         return {'val_loss': loss.detach()}
 
     def validation_epoch_end(self, outputs):
@@ -103,24 +97,22 @@ class NormalArchitecture(nn.Module):
         return history
 
 class RefinedArchitecture(nn.Module):
-    def __init__(self, encoder, dst, kp, ap):
+    def __init__(self, encoder, dst, kp):
         super(RefinedArchitecture, self).__init__()
         self.encoder = encoder
         self.fc_dst = dst #multiheaded neural network  ##regression
         self.fc_kp = kp   #multiclass
-        self.fc_ap = ap   #regression
     def forward(self, x):
         out = self.encoder(x)
         dst_out = self.fc_dst(out)
         kp_out = self.fc_kp(out)
-        ap_out = self.fc_ap(out)
-        return dst_out, kp_out, ap_out
-    def training_step(self, batch, weigths = [0.1,0.1,1]):
+        return dst_out, kp_out
+    def training_step(self, batch, weigths = [0.01,0.01,1]):
         h_weigth, o_weigth, main = weigths
         #initialize loss
         loss = 0
         #from batch
-        l1_sample, l2_sample, dst, kp, ap = batch
+        l1_sample, l2_sample, dst, kp = batch
         #encoder loss
         h_t = self.encoder(l1_sample)
         h_t_hat = self.encoder(l2_sample)
@@ -131,19 +123,15 @@ class RefinedArchitecture(nn.Module):
         ##initialize output loss
         output_loss = 0
         #inference l1
-        dst_out = self.fc_dst(l1_sample)
-        kp_out = self.fc_kp(l1_sample)
-        ap_out = self.fc_ap(l1_sample)
+        dst_out = self.fc_dst(h_t)
+        kp_out = self.fc_kp(h_t)
         #inference l2
-        dst_out_hat = self.fc_dst(l2_sample)
-        kp_out_hat = self.fc_kp(l2_sample)
-        ap_out_hat = self.fc_ap(l2_sample)
+        dst_out_hat = self.fc_dst(h_t_hat)
+        kp_out_hat = self.fc_kp(h_t_hat)
         ##dst index cost-1st head with both outputs
         output_loss += F.mse_loss(dst_out, dst_out_hat)
         ##kp index cost - 2nd head with both outputs
         output_loss += F.mse_loss(kp_out, kp_out_hat)
-        ##ap index cost -3rd head with both outputs
-        output_loss += F.mse_loss(ap_out, ap_out_hat)
         ##add to overall
         loss+=o_weigth*output_loss
         #main loss 
@@ -152,18 +140,16 @@ class RefinedArchitecture(nn.Module):
         main_loss += F.mse_loss(dst_out, dst)
         ##kp index cost - 2nd head
         main_loss += F.cross_entropy(kp_out, kp)
-        ##ap index cost -3rd head
-        main_loss += F.mse_loss(ap_out, ap)
         ##add to overall
         loss+=main*main_loss
         return loss, encoder_loss, output_loss, main_loss
 
-    def validation_step(self, batch, weigths = [0.1,0.1,1]):
+    def validation_step(self, batch, weigths = [0.01,0.01,1]):
         h_weigth, o_weigth, main = weigths
         #initialize loss
         loss = 0
         #from batch
-        l1_sample, l2_sample, dst, kp, ap = batch
+        l1_sample, l2_sample, dst, kp = batch
         #encoder loss
         h_t = self.encoder(l1_sample)
         h_t_hat = self.encoder(l2_sample)
@@ -174,19 +160,15 @@ class RefinedArchitecture(nn.Module):
         ##initialize output loss
         output_loss = 0
         #inference l1
-        dst_out = self.fc_dst(l1_sample)
-        kp_out = self.fc_kp(l1_sample)
-        ap_out = self.fc_ap(l1_sample)
+        dst_out = self.fc_dst(h_t)
+        kp_out = self.fc_kp(h_t)
         #inference l2
-        dst_out_hat = self.fc_dst(l2_sample)
-        kp_out_hat = self.fc_kp(l2_sample)
-        ap_out_hat = self.fc_ap(l2_sample)
+        dst_out_hat = self.fc_dst(h_t_hat)
+        kp_out_hat = self.fc_kp(h_t_hat)
         ##dst index cost-1st head with both outputs
         output_loss += F.mse_loss(dst_out, dst_out_hat)
         ##kp index cost - 2nd head with both outputs
         output_loss += F.mse_loss(kp_out, kp_out_hat)
-        ##ap index cost -3rd head with both outputs
-        output_loss += F.mse_loss(ap_out, ap_out_hat)
         ##add to overall
         loss+=o_weigth*output_loss
         #main loss 
@@ -195,8 +177,6 @@ class RefinedArchitecture(nn.Module):
         main_loss += F.mse_loss(dst_out, dst)
         ##kp index cost - 2nd head
         main_loss += F.cross_entropy(kp_out, kp)
-        ##ap index cost -3rd head
-        main_loss += F.mse_loss(ap_out, ap)
         ##add to overall
         loss+=main*main_loss
         return {'overall_loss': loss.detach(), 'main_loss': main_loss.detach(), 'output_loss': output_loss.detach(), 'encoder_loss': encoder_loss.detach()}
