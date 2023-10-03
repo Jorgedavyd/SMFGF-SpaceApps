@@ -10,7 +10,6 @@ import pandas as pd
 import numpy as np
 from torchvision.datasets.utils import download_url
 from datetime import datetime, timedelta
-import time
 
 def import_train(scrap_date):
     os.makedirs('data/compressed', exist_ok=True)
@@ -126,8 +125,6 @@ def automated_preprocessing(scrap_date: list):
 
     dst, kp = import_targets(scrap_date)
 
-    level_1.index = pd.to_datetime(level_1.index)
-    level_2.index = pd.to_datetime(level_2.index)
     return level_1, level_2,dst, kp
 
 def from_csv():
@@ -159,8 +156,14 @@ def from_csv():
     mg1 = pd.concat(mg1_list)
     f1m = pd.concat(f1m_list)
     m1m = pd.concat(m1m_list)
-
-    return pd.concat([fc1, mg1], axis =1), pd.concat([f1m, m1m], axis =1)
+    
+    level_1 = pd.concat([fc1, mg1], axis =1)
+    level_2 = pd.concat([f1m, m1m], axis =1)
+    
+    level_1.index = pd.to_datetime(level_1.index)
+    level_2.index = pd.to_datetime(level_2.index)
+    
+    return level_1, level_2
 
 def gzip_to_nc():
     #defining raw data dataframes

@@ -4,9 +4,9 @@ from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 def min_to_hour(idx):
-    return np.floor(idx/60)
+    return int(np.floor(idx/60))
 def hour_to_3_hour(idx):
-    return np.floor(idx/3)
+    return int(np.floor(idx/3))
 
 def map_to_kp_index(interval):
     if interval < 0 or interval > 28:
@@ -65,7 +65,10 @@ class RefinedTrainingDataset(Dataset):
         else:
             dst = self.dst[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
             kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(min_to_hour(self.pred_length))]
-        
+        l1_sample = torch.tensor(l1_sample, dtype=torch.float32)
+        l2_sample = torch.tensor(l2_sample, dtype=torch.float32)
+        dst = torch.tensor(dst, dtype=torch.float32)
+        kp = torch.tensor(kp, dtype=torch.float32)
         return l1_sample, l2_sample, dst, kp
 
 class NormalTrainingDataset(Dataset):
@@ -92,6 +95,8 @@ class NormalTrainingDataset(Dataset):
         else:
             dst = self.dst[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
             kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(min_to_hour(self.pred_length))+1]
-        
+        feature = torch.tensor(feature, dtype=torch.float32)
+        dst = torch.tensor(dst, dtype=torch.float32)
+        kp = torch.tensor(kp, dtype=torch.float32)
         return feature, dst, kp
     

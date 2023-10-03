@@ -8,7 +8,7 @@ def get_lr(optimizer):
 
 class NormalArchitecture(nn.Module):
     def __init__(self, encoder, dst, kp):
-        super(RefinedArchitecture, self).__init__()
+        super(NormalArchitecture, self).__init__()
         self.encoder = encoder
         self.fc_dst = dst #multiheaded neural network ##regression
         self.fc_kp = kp   #multiclass
