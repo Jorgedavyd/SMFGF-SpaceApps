@@ -55,7 +55,7 @@ class RefinedTrainingDataset(Dataset):
         self.mode = hour
         self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
     def __len__(self):
-        return self.raw.shape[1] - (self.sequence_length + self.pred_length) + 1
+        return self.raw.shape[0] - (self.sequence_length + self.pred_length) + 1
     def __getitem__(self, idx):
         l1_sample = self.raw[idx:idx+self.sequence_length, :]
         l2_sample = self.pro[idx:idx+self.sequence_length, :]
@@ -86,7 +86,7 @@ class NormalTrainingDataset(Dataset):
         self.mode = hour
         self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
     def __len__(self):
-        return self.features.shape[1] - (self.sequence_length + self.pred_length) + 1
+        return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
     def __getitem__(self, idx):
         feature = self.features[idx:idx+self.sequence_length, :]
         if self.mode:

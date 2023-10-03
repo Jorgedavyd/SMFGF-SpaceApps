@@ -1,15 +1,14 @@
+from torchvision.datasets.utils import download_url
+from datetime import datetime, timedelta,date
 import xarray as xr
 import pandas as pd
 import os
 import gzip
 import requests
-import csv
 from bs4 import BeautifulSoup
 from datetime import date
 import pandas as pd
 import numpy as np
-from torchvision.datasets.utils import download_url
-from datetime import datetime, timedelta
 
 def import_train(scrap_date):
     os.makedirs('data/compressed', exist_ok=True)
