@@ -278,6 +278,7 @@ def preprocessing():
     return pd.concat([l1_faraday, l1_magnetometer], axis =1), pd.concat([l2_faraday, l2_magnetometer], axis =1)
 
 def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
+    os.makedirs('data/Dst_index', exist_ok = True)
     for month in months:
         if month+'.csv' in os.listdir('data/Dst_index'):
             continue

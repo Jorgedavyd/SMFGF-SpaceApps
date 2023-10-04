@@ -1,4 +1,4 @@
-import torch.functional as F
+import torch.nn.functional as F
 import torch.nn as nn
 import torch
 
@@ -24,7 +24,7 @@ class NormalArchitecture(nn.Module):
         #dst index cost-1st head
         loss += F.mse_loss(dst_out, dst)
         #kp index cost - 2nd head
-        loss += F.cross_entropy(kp_out, kp)
+        loss += F.mse_loss(kp_out, kp)
         return loss
 
     def validation_step(self, batch):
@@ -34,7 +34,7 @@ class NormalArchitecture(nn.Module):
         #dst index cost-1st head
         loss += F.mse_loss(dst_out, dst)
         #kp index cost - 2nd head
-        loss += F.cross_entropy(kp_out, kp)
+        loss += F.mse_loss(kp_out, kp)
         return {'val_loss': loss.detach()}
 
     def validation_epoch_end(self, outputs):
@@ -139,7 +139,7 @@ class RefinedArchitecture(nn.Module):
         ##dst index cost-1st head
         main_loss += F.mse_loss(dst_out, dst)
         ##kp index cost - 2nd head
-        main_loss += F.cross_entropy(kp_out, kp)
+        main_loss += F.mse_loss(kp_out, kp)
         ##add to overall
         loss+=main*main_loss
         return loss, encoder_loss, output_loss, main_loss
@@ -176,7 +176,7 @@ class RefinedArchitecture(nn.Module):
         ##dst index cost-1st head
         main_loss += F.mse_loss(dst_out, dst)
         ##kp index cost - 2nd head
-        main_loss += F.cross_entropy(kp_out, kp)
+        main_loss += F.mse_loss(kp_out, kp)
         ##add to overall
         loss+=main*main_loss
         return {'overall_loss': loss.detach(), 'main_loss': main_loss.detach(), 'output_loss': output_loss.detach(), 'encoder_loss': encoder_loss.detach()}

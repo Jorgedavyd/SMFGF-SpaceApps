@@ -34,7 +34,7 @@ class Simple1DCNN(nn.Module):
         self.conv1d = nn.Conv1d(input_size, 10, kernel_size, stride)
         self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool1d(kernel_size=2, stride=2)
-        self.fc = DeepNeuralNetwork(10, hidden_size,*architecture)
+        self.fc = DeepNeuralNetwork(40, hidden_size,*architecture)
         ##add attention
     def forward(self, x):
         x = self.conv1d(x)
@@ -160,7 +160,7 @@ class BidirectionalRNNWithAttention(nn.Module):
         self.rnn1 = rnn1
         self.rnn2 = rnn2
         # Attention layers
-        self.attention_layer = nn.Linear(2 * self.rnn1.hidden_size, self.rnn1.hidden_size)
+        self.attention_layer = nn.Linear(2 * self.rnn1.hidden_size, 2*self.rnn1.hidden_size)
         self.softmax = nn.Softmax(dim=1)
         
     def forward(self, x):

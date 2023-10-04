@@ -1,10 +1,11 @@
-from data.data_utils import hour_to_3_hour, map_to_kp_index
+from data.data_utils import hour_to_3_hour
 
 import torch
 
 class GeomagneticModel():
-    def __init__(self, model):
+    def __init__(self, model, dst_scaler):
         self.model = model
+        self.dst_scaler = dst_scaler
 
     def dst_description(self, dst_index):
         if dst_index >= -20:
@@ -18,25 +19,24 @@ class GeomagneticModel():
         else:
             return "Severe storm (Severe)"
     def kp_description(self, kp_index):
-        if kp_index <= 14:
+        if kp_index <= 4:
             return "Weak or no storm (Quiet)"
-        elif kp_index < 17:
+        elif kp_index <= 5:
             return "G1:\nMigratory animals are affected at this and higher levels; aurora is commonly visible at high latitudes.\nWeak power grid fluctuations can occur."
-        elif kp_index < 20:
+        elif kp_index <= 6:
             return "G2:\nHigh-latitude power systems may experience voltage alarms, long-duration storms may cause transformer damage.\nHF radio propagation can fade at higher latitudes, and aurora has been seen at 55° geomagnetic lat."
-        elif kp_index < 23:
+        elif kp_index <= 7:
             return "G3:\nVoltage corrections may be required, false alarms triggered on some protection devices.\nIntermittent satellite navigation and low-frequency radio navigation problems may occur, HF radio may be intermittent, and aurora has been seen at 50° geomagnetic lat."
         else:
             return "G4-G5:\nWidespread voltage control problems and protective system problems can occur, some grid systems may experience complete collapse or blackouts. Transformers may experience damage."
 
     def geomagnetic_asses(self, input): ## change
-        dst_desc = [self.dst_description(dst.item()) for dst,_,_ in self.model(input)]
-        dst_index = [dst.item() for dst,_,_ in self.model(input)]
-        kp_desc = [self.kp_description(kp) for _,kp,_ in self.model(input)]
-        kp_index = [map_to_kp_index(torch.argmax(kp, dim =1).item()) for _,kp,_ in self.model(input)]
-        ap_index = [ap.item() for _,_,ap in self.model(input)]
+        dst_desc = [self.dst_description(dst) for dst_list,_ in self.model(input) for dst in dst_list]
+        dst_index = [self.dst_scaler.inverse_transform(dst) for dst_list,_ in self.model(input) for dst in dst_list]
+        kp_desc = [self.kp_description(kp) for _,kp_list in self.model(input) for kp in kp_list]
+        kp_index = [kp for _,kp_list in self.model(input) for kp in kp_list]
         for hour, (conc, conc_2) in enumerate(zip(dst_desc, kp_desc)):
-            print(f'Hour {hour}:\n\tDst index: {dst_index[hour]}\n\t\tDescription: {conc}\n\tKp index: {kp_index[hour_to_3_hour(hour)]}\n\ta index: {ap_index[hour_to_3_hour(hour)]}\n\t\tDescription: {conc_2}')
+            print(f'Hour {hour}:\n\tDst index: {dst_index[hour]}\n\t\tDescription: {conc}\n\tKp index: {kp_index[hour_to_3_hour(hour)]}\n\t\tDescription: {conc_2}')
 
 ## GPU usage
 
