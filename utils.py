@@ -68,4 +68,3 @@ class DeviceDataLoader():
     def __len__(self):
         """Number of batches"""
         return len(self.dl) #Mandar los data_loader que tienen todos los batch hacia la GPU
-

@@ -43,7 +43,7 @@ class NormalArchitecture(nn.Module):
         return {'val_loss': epoch_loss.item()}
 
     def epoch_end(self, epoch, result): # Seguimiento del entrenamiento
-        print("Epoch [{}], last_lr: {:.5f}, train_loss: {:.4f}, val_loss: {:.4f}".format(
+        print("Epoch [{}]:\n\tlast_lr: {:.5f}\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}".format(
             epoch, result['lrs'][-1], result['train_loss'], result['val_loss']))
     
     def evaluate(self, val_loader):
@@ -193,7 +193,7 @@ class RefinedArchitecture(nn.Module):
         return {'val_overall_loss': epoch_overall.item(), 'val_main_loss': epoch_main.item(), 'val_output_loss': epoch_output.item(), 'val_encoder_loss': epoch_encoder.item()}
 
     def epoch_end(self, epoch, result): # Seguimiento del entrenamiento
-        print("Epoch [{}], last_lr: {:.5f}\n,train_overall_loss: {:.4f}, train_main_loss: {:.4f}, train_output_loss: {:.4f}, train_encoder_loss: {:.4f}\nval_overall_loss: {:.4f}, val_main_loss: {:.4f}, val_output_loss: {:.4f}, val_encoder_loss: {:.4f}".format(
+        print("Epoch [{}]\n\tlast_lr: {:.5f}\n\ttrain_overall_loss: {:.4f}\n\ttrain_main_loss: {:.4f}\n\ttrain_output_loss: {:.4f}\n\ttrain_encoder_loss: {:.4f}\n\tval_overall_loss: {:.4f}\n\tval_main_loss: {:.4f}\n\tval_output_loss: {:.4f}\n\tval_encoder_loss: {:.4f}".format(
             epoch, result['lrs'][-1], result['train_overall_loss'], result['train_main_loss'], result['train_output_loss'], result['train_encoder_loss'], result['val_overall_loss'], result['val_main_loss'], result['val_output_loss'], result['val_encoder_loss']))
     
     def evaluate(self, val_loader):

@@ -49,6 +49,10 @@ def map_kp_index_to_interval(kp_index):
 #We need the pred_length to be of size divisible by 3 if possible
 class RefinedTrainingDataset(Dataset):
     def __init__(self, l1_df, l2_df, dst_series, kp_series, sequence_length, prediction_length, hour = False):
+        #other parameters
+        self.sequence_length = sequence_length
+        self.mode = hour
+        self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
         #l1 scaler
         self.x_scaler = StandardScaler()
         self.raw = self.x_scaler.fit_transform(l1_df.values)
@@ -59,13 +63,16 @@ class RefinedTrainingDataset(Dataset):
         self.dst_scaler = StandardScaler() #
         self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
         #Kp scaler
+        self.kp_scaler = StandardScaler() #
         self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
-        #other parameters
-        self.sequence_length = sequence_length
-        self.mode = hour
-        self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
+        self.kp = self.kp_scaler.fit_transform(self.kp)
+
     def __len__(self):
-        return self.raw.shape[0] - (self.sequence_length + self.pred_length) + 1
+        if self.mode:
+            return self.raw.shape[0] - (self.sequence_length + self.pred_length) + 1
+        else:
+            return self.raw.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+            
     def __getitem__(self, idx):
         l1_sample = self.raw[idx:idx+self.sequence_length, :]
         l2_sample = self.pro[idx:idx+self.sequence_length, :]
@@ -90,13 +97,18 @@ class NormalTrainingDataset(Dataset):
         self.dst_scaler = StandardScaler() #
         self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
         #Kp scaler
+        self.kp_scaler = StandardScaler() #
         self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
+        self.kp = self.kp_scaler.fit_transform(self.kp)
         #other parameters
         self.sequence_length = sequence_length
         self.mode = hour
         self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
     def __len__(self):
-        return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
+        if self.mode:
+            return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
+        else:
+            return self.features.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
     def __getitem__(self, idx):
         feature = self.features[idx:idx+self.sequence_length, :]
         if self.mode:

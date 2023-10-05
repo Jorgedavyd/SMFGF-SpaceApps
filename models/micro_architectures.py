@@ -1,6 +1,21 @@
 import torch.nn as nn
 import torch
     
+class Attention(nn.Module):
+    def __init__(self, hidden_size):
+        super(Attention, self).__init__()
+        self.hidden_size = hidden_size
+        self.attention_layer = nn.Linear(hidden_size, hidden_size)
+        
+    def forward(self, hidden_states):
+        attention_weights = self.attention_layer(hidden_states)
+        attention_weights = torch.tanh(attention_weights)
+        attention_weights = torch.softmax(attention_weights, dim=0)
+        
+        context_vector = torch.sum(attention_weights * hidden_states, dim=0)
+        
+        return context_vector
+    
 def  SingularLayer(input_size, output):
     out = nn.Sequential(
         nn.Linear(input_size, output),
@@ -45,23 +60,34 @@ class Simple1DCNN(nn.Module):
         return x
 
 class DeepVanillaRNN(nn.Module):
-    def __init__(self, hidden_size, input_size, batch_size, mlp_architecture, hidden_state = None):
+    def __init__(self, hidden_size, input_size, mlp_architecture):
         super(DeepVanillaRNN, self).__init__()
         self.hidden_size = hidden_size
-        if hidden_state is None:
-            self.hidden_state = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
-        else:
-            self.hidden_state = hidden_state
         self.hidden_mlp = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
         self.input_mlp = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
+        self.attention = Attention(self.hidden_size)
         ##add attention
     def forward(self,x):
-        a_t = self.hidden_mlp(self.hidden_state) + self.input_mlp(x)
-        self.hidden_state = torch.tanh(a_t)
-        return self.hidden_state
+        batch_size, seq_len, _ = x.size()
+
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+        hn_list = []
+
+        #create here loop for training the entire sequence
+        for t in range(seq_len):
+            xt = x[:, t, :]# Extract the input at time t
+            
+            a_t = self.hidden_mlp(hn) + self.input_mlp(xt)
+            
+            hn = torch.tanh(a_t)
+
+            hn_list.append(hn)
+        hidden_states = torch.stack(hn_list)
+        context = self.attention(hidden_states)
+        return context
 
 class DeepLSTM(nn.Module):
-    def __init__(self, hidden_size, input_size, batch_size, mlp_architecture, hidden_state = None, cell_state = None):
+    def __init__(self, hidden_size, input_size, mlp_architecture):
         super(DeepLSTM, self).__init__()
         self.hidden_size = hidden_size
         #Forget gate
@@ -75,34 +101,39 @@ class DeepLSTM(nn.Module):
         self.O_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
         #Input node
         self.C_hat_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.C_hat_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)        
-        #c and H
-        if hidden_state is None:
-            self.H = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
-        else:
-            self.H = hidden_state
-        if cell_state is None:
-            self.C = torch.zeros(1, batch_size, hidden_size, requires_grad = True)
-        else:
-            self.C = cell_state
-        #add attention
+        self.C_hat_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)  
+        self.attention = Attention(self.hidden_size)      
     def forward(self,x):
-        self.a_F = self.F_h(self.H) + self.F_x(x)
-        self.F = torch.sigmoid(self.a_F)
-        self.a_I = self.I_h(self.H) + self.I_x(x)
-        self.I = torch.sigmoid(self.a_I)
-        self.a_O = self.O_h(self.H) + self.O_x(x)
-        self.O = torch.sigmoid(self.a_O)
-        self.a_C_hat = self.C_hat_h(self.H) + self.C_hat_x(x)
-        self.C_hat = torch.tanh(self.a_C_hat)
-        self.C = self.F*self.C + self.I*self.C_hat
-        self.H = self.O*torch.tanh(self.C)
-        return self.H
+        batch_size, sequence_size, _ = x.size()
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn_list = []
+
+        for t in range(sequence_size):
+            xt = x[:, t, :]
+            #forward
+            a_F = self.F_h(hn) + self.F_x(xt)
+            F = torch.sigmoid(a_F) #forget gate
+            a_I = self.I_h(hn) + self.I_x(xt)
+            I = torch.sigmoid(a_I) #input gate
+            a_O = self.O_h(hn) + self.O_x(xt)
+            O = torch.sigmoid(a_O) #output gate
+            a_C_hat = self.C_hat_h(hn) + self.C_hat_x(xt)
+            C_hat = torch.tanh(a_C_hat)
+            cn = F*cn + I*C_hat
+            hn = O*torch.tanh(cn)
+            hn_list.append(hn)
+
+        hidden_states = torch.stack(hn_list)
+        context = self.attention(hidden_states)
+        
+        return context
 
 class DeepGRU(nn.Module):
-    def __init__(self, hidden_size, input_size, batch_size, mlp_architecture, hidden_state = None):
+    def __init__(self, hidden_size, input_size, mlp_architecture):
         super(DeepGRU, self).__init__()
         self.hidden_size = hidden_size
+        self.attention = Attention(self.hidden_size)
         #Update gate
         self.Z_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
         self.Z_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
@@ -112,81 +143,110 @@ class DeepGRU(nn.Module):
         #Possible hidden state
         self.H_hat_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
         self.H_hat_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
-        if hidden_state is None:
-            self.H = torch.zeros(1, batch_size, hidden_size, requires_grad=True)
-        else:
-            self.H = hidden_state
-        #add attention
     def forward(self, x):
-        self.Z = torch.sigmoid(self.Z_h(self.H)+self.Z_x(x))
-        self.R = torch.sigmoid(self.R_h(self.H)+self.R_x(x))
-        self.H_hat = torch.tanh(self.H_hat_h(self.H*self.R)+self.H_hat_x(x))
-        self.H = self.H*self.Z + (torch.ones_like(self.Z)-self.Z)*self.H_hat
-        return self.H
+        batch_size, sequence_size, _ = x.size()
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn_list = []
+        for t in range(sequence_size):
+            xt = x[:, t, :]
+            Z = torch.sigmoid(self.Z_h(hn)+self.Z_x(xt))
+            R = torch.sigmoid(self.R_h(hn)+self.R_x(xt))
+            H_hat = torch.tanh(self.H_hat_h(hn*R)+self.H_hat_x(xt))
+            hn = hn*Z + (torch.ones_like(Z)-Z)*H_hat
+            hn_list.append(hn)
+        hidden_states = torch.stack(hn_list)
+        context = self.attention(hidden_states)
+        return context
     
 
 class LSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, batch_first=True):
+    def __init__(self, input_size, hidden_size):
         super(LSTM, self).__init__()
         self.hidden_size = hidden_size
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=batch_first)
+        self.lstm = nn.LSTMCell(input_size, hidden_size)
+        self.attention = Attention(self.hidden_size)
 
     def forward(self, x):
-        _, (h0,_) = self.lstm(x)
-        return h0
+        batch_size, sequence_size, _ = x.size()
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn_list = []
+        for t in range(sequence_size):
+            
+            xt = x[:, t, :]
+
+            hn,cn = self.lstm(xt, (hn,cn))
+            hn_list.append(hn)
+        hidden_states = torch.stack(hn_list)
+        context = self.attention(hidden_states)
+
+        return context
 class GRU(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, batch_first=True):
+    def __init__(self, input_size, hidden_size):
         super(GRU, self).__init__()
         self.hidden_size = hidden_size
-        self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=batch_first)
+        self.gru = nn.GRUCell(input_size, hidden_size)
+        self.attention = Attention(self.hidden_size)
 
     def forward(self, x):
-        _, h0 = self.gru(x) 
-        return h0
+        batch_size, sequence_size, _ = x.size()
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn_list = []
+        for t in range(sequence_size):
+            
+            xt = x[:, t, :]
+
+            hn = self.gru(xt, hn) 
+
+            hn_list.append(hn)
+        
+        hidden_states = torch.stack(hn_list)
+        
+        context = self.attention(hidden_states)
+        return context
     
 class VanillaRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, batch_first=True):
+    def __init__(self, input_size, hidden_size):
         super(VanillaRNN, self).__init__()
         self.hidden_size = hidden_size
-        self.rnn = nn.RNN(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=batch_first)
+        self.rnn = nn.RNNCell(input_size, hidden_size)
+        self.attention = Attention(self.hidden_size)
     
-    def forward(self, x, h0):
-        _, hn = self.rnn(x, h0)
-        return hn  
+    def forward(self, x):
+        batch_size, sequence_size, _ = x.size()
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn_list = []
+        for t in range(sequence_size):
+            
+            xt = x[:, t, :]
+
+            hn = self.rnn(xt, hn)
+
+            hn_list.append(hn)
+
+        hidden_states = torch.stack(hn_list)
+
+        context_vector = self.attention(hidden_states)
+        
+        return context_vector
     
 class BidirectionalRNNWithAttention(nn.Module):
     def __init__(self, rnn1, rnn2):
         super(BidirectionalRNNWithAttention, self).__init__()
         self.rnn1 = rnn1
         self.rnn2 = rnn2
-        # Attention layers
-        self.attention_layer = nn.Linear(2 * self.rnn1.hidden_size, 2*self.rnn1.hidden_size)
-        self.softmax = nn.Softmax(dim=1)
         
     def forward(self, x):
         # Forward pass through the first RNN
         hidden1 = self.rnn1(x)
-        
         # Reverse the input sequence for the second RNN
         x_backward = torch.flip(x, [1])
         
         # Forward pass through the second RNN
         hidden2 = self.rnn2(x_backward)
-        
+
         # Concatenate to bidirectional output
-        hidden_bidirectional = torch.cat([hidden1,hidden2], dim = 2)
+        hidden_bidirectional = torch.cat((hidden1,hidden2), dim = 1)
         
-        # Compute the scores
-        attn_scores = self.attention_layer(hidden_bidirectional)
+        return hidden_bidirectional
 
-        #Compute the attention weights
-
-        attn_weights = self.softmax(attn_scores)
-
-        #Compute the context
-
-        context = torch.sum(attn_weights*hidden_bidirectional, dim = 1)
-        
-        return context
-
-#Create non deep ones
