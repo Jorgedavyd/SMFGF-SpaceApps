@@ -29,7 +29,7 @@ def import_train(scrap_date):
             download_url(url, root, filename)
 
 #format: YYYYMMDD000000
-def automated_preprocessing(scrap_date: list):
+def automated_preprocessing(scrap_date: list, sep = False):
     os.makedirs('data/compressed', exist_ok=True)
     os.makedirs('data/uncompressed', exist_ok=True)
     os.makedirs('data/DSCOVR_L2/faraday', exist_ok=True)
@@ -120,13 +120,13 @@ def automated_preprocessing(scrap_date: list):
             magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{filename[:-6]}.csv')
             os.remove(output_file)
 
-    level_1, level_2 = from_csv()
+    level_1, level_2 = from_csv(sep)
 
     dst, kp = import_targets(scrap_date)
 
     return level_1, level_2,dst, kp
 
-def from_csv():
+def from_csv(sep = False):
     fc1_list = []
     for file in os.listdir('data/DSCOVR_L1/faraday'):
         file = os.path.join('data/DSCOVR_L1/faraday', file)
@@ -155,12 +155,15 @@ def from_csv():
     mg1 = pd.concat(mg1_list)
     f1m = pd.concat(f1m_list)
     m1m = pd.concat(m1m_list)
-    
-    level_1 = pd.concat([fc1, mg1], axis =1)
-    level_2 = pd.concat([f1m, m1m], axis =1)
-    
-    level_1.index = pd.to_datetime(level_1.index)
-    level_2.index = pd.to_datetime(level_2.index)
+    if sep:
+        level_1 = (fc1, mg1)
+        level_2 = (f1m, m1m)
+    else:
+        level_1 = pd.concat([fc1, mg1], axis =1)
+        level_2 = pd.concat([f1m, m1m], axis =1)
+        
+        level_1.index = pd.to_datetime(level_1.index)
+        level_2.index = pd.to_datetime(level_2.index)
     
     return level_1, level_2
 
