@@ -2,41 +2,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch
 
-def get_lr(optimizer):
-    for param_group in optimizer.param_groups:
-        return param_group['lr'] # Seguimiento del learning rate
-
-class NormalArchitecture(nn.Module):
-    def __init__(self, encoder, dst, kp):
-        super(NormalArchitecture, self).__init__()
-        self.encoder = encoder
-        self.fc_dst = dst #multiheaded neural network ##regression
-        self.fc_kp = kp   #multiclass
-    def forward(self, x):
-        out = self.encoder(x)
-        dst_out = self.fc_dst(out)
-        kp_out = self.fc_kp(out)
-        return dst_out, kp_out
-    def training_step(self, batch):
-        loss = 0 #initialize loss
-        feature, dst, kp = batch #decompose batch
-        dst_out, kp_out = self(feature)        
-        #dst index cost-1st head
-        loss += F.mse_loss(dst_out, dst)
-        #kp index cost - 2nd head
-        loss += F.mse_loss(kp_out, kp)
-        return loss
-
-    def validation_step(self, batch):
-        loss = 0 #initialize loss
-        feature, dst, kp = batch #decompose batch
-        dst_out, kp_out = self(feature)        
-        #dst index cost-1st head
-        loss += F.mse_loss(dst_out, dst)
-        #kp index cost - 2nd head
-        loss += F.mse_loss(kp_out, kp)
-        return {'val_loss': loss.detach()}
-
+class DefaultBase(nn.Module):
     def validation_epoch_end(self, outputs):
         batch_losses = [x['val_loss'] for x in outputs]
         epoch_loss = torch.stack(batch_losses).mean()   # Sacar el valor expectado de todo el conjunto de costos
@@ -96,6 +62,39 @@ class NormalArchitecture(nn.Module):
             history.append(result) # añadir a la lista el diccionario de resultados
         return history
 
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr'] # Seguimiento del learning rate
+
+class NormalArchitecture(DefaultBase):
+    def __init__(self, encoder, dst, kp):
+        super(NormalArchitecture, self).__init__()
+        self.encoder = encoder
+        self.fc_dst = dst #multiheaded neural network ##regression
+        self.fc_kp = kp   #multiclass
+    def forward(self, x):
+        out = self.encoder(x)
+        dst_out = self.fc_dst(out)
+        kp_out = self.fc_kp(out)
+        return dst_out, kp_out
+    def training_step(self, batch):
+        loss = 0 #initialize loss
+        feature, dst, kp = batch #decompose batch
+        dst_out, kp_out = self(feature)        
+        #dst index cost-1st head
+        loss += F.mse_loss(dst_out, dst)
+        #kp index cost - 2nd head
+        loss += F.mse_loss(kp_out, kp)
+        return loss
+    def validation_step(self, batch):
+        loss = 0 #initialize loss
+        feature, dst, kp = batch #decompose batch
+        dst_out, kp_out = self(feature)        
+        #dst index cost-1st head
+        loss += F.mse_loss(dst_out, dst)
+        #kp index cost - 2nd head
+        loss += F.mse_loss(kp_out, kp)
+        return {'val_loss': loss.detach()}
 class RefinedArchitecture(nn.Module):
     def __init__(self, encoder, dst, kp):
         super(RefinedArchitecture, self).__init__()
@@ -255,7 +254,7 @@ class RefinedArchitecture(nn.Module):
             history.append(result)
         return history
 
-class RNNtoSingleOUT(nn.Module):
+class RNNtoSingleOUT(DefaultBase):
     def __init__(self, encoder, fc):
         super(NormalArchitecture, self).__init__()
         self.encoder = encoder
@@ -278,61 +277,28 @@ class RNNtoSingleOUT(nn.Module):
         loss = F.mse_loss(pred, target)
         return {'val_loss': loss.detach()}
 
-    def validation_epoch_end(self, outputs):
-        batch_losses = [x['val_loss'] for x in outputs]
-        epoch_loss = torch.stack(batch_losses).mean()   # Sacar el valor expectado de todo el conjunto de costos
-        return {'val_loss': epoch_loss.item()}
+class MultiHead2SingleOUT(DefaultBase):
+    def __init__(self, encoder_fc, encoder_mg, fc):
+        super(NormalArchitecture, self).__init__()
+        self.encoder_fc = encoder_fc
+        self.encoder_mg = encoder_mg
+        self.fc = fc #sum of both hiddens at input_size
+    def forward(self, fc, mg):
+        out_1 = self.encoder_fc(fc)
+        out_2 = self.encoder_mg(mg)
+        hidden = torch.cat((out_1, out_2), dim = 1)
+        out = self.fc(hidden)
+        return out
+    def training_step(self, batch):
+        fc, mg, target = batch #decompose batch
+        pred = self(fc, mg)        
+        #cost
+        loss = F.mse_loss(pred, target)
+        return loss
 
-    def epoch_end(self, epoch, result): # Seguimiento del entrenamiento
-        print("Epoch [{}]:\n\tlast_lr: {:.5f}\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}".format(
-            epoch, result['lrs'][-1], result['train_loss'], result['val_loss']))
-    
-    def evaluate(self, val_loader):
-        self.eval()
-        outputs = [self.validation_step(batch) for batch in val_loader]
-        return self.validation_epoch_end(outputs)
-    
-    def fit(self, epochs, max_lr, train_loader, val_loader,
-                  weight_decay=0, grad_clip=False, opt_func=torch.optim.Adam):
-        torch.cuda.empty_cache()
-        history = [] # Seguimiento de entrenamiento
-
-        # Poner el método de minimización personalizado
-        optimizer = opt_func(self.parameters(), max_lr, weight_decay=weight_decay)
-        # Learning rate scheduler, le da momento inicial al entrenamiento para converger con valores menores al final
-        sched = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr, epochs=epochs,
-                                                    steps_per_epoch=len(train_loader))
-
-        for epoch in range(epochs):
-            # Training Phase
-            self.train()  #Activa calcular los vectores gradiente
-            train_losses = []
-            lrs = [] # Seguimiento
-            for batch in train_loader:
-                # Calcular el costo
-                loss = self.training_step(batch)
-                #Seguimiento
-                train_losses.append(loss)
-                #Calcular las derivadas parciales
-                loss.backward()
-
-                # Gradient clipping, para que no ocurra el exploding gradient
-                if grad_clip:
-                    nn.utils.clip_grad_value_(self.parameters(), grad_clip)
-
-                #Efectuar el descensod e gradiente y borrar el historial
-                optimizer.step()
-                optimizer.zero_grad()
-
-                # Guardar el learning rate utilizado en el cycle.
-                lrs.append(get_lr(optimizer))
-                #Utilizar el siguiente valor de learning rate dado OneCycle scheduler
-                sched.step()
-
-            # Fase de validación
-            result = self.evaluate(val_loader)
-            result['train_loss'] = torch.stack(train_losses).mean().item() #Stackea todos los costos de las iteraciones sobre los batches y los guarda como la pérdida general de la época
-            result['lrs'] = lrs #Guarda la lista de learning rates de cada batch
-            self.epoch_end(epoch, result) #imprimir en pantalla el seguimiento
-            history.append(result) # añadir a la lista el diccionario de resultados
-        return history
+    def validation_step(self, batch):
+        fc, mg, target = batch #decompose batch
+        pred = self(fc, mg)        
+        #cost
+        loss = F.mse_loss(pred, target)
+        return {'val_loss': loss.detach()}

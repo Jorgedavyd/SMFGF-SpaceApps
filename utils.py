@@ -37,6 +37,7 @@ class GeomagneticModel():
         kp_index = [kp for _,kp_list in self.model(input) for kp in kp_list]
         for hour, (conc, conc_2) in enumerate(zip(dst_desc, kp_desc)):
             print(f'Hour {hour}:\n\tDst index: {dst_index[hour]}\n\t\tDescription: {conc}\n\tKp index: {kp_index[hour_to_3_hour(hour)]}\n\t\tDescription: {conc_2}')
+        ##redefine
 
 ## GPU usage
 

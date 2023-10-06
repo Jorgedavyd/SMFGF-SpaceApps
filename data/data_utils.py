@@ -220,5 +220,63 @@ class DstData(Dataset):
             feature = torch.tensor(feature, dtype=torch.float32)
             return feature, dst
     
+dict_values = ['dst_kyoto', 'kp_gfz']
+class MainToSingleTarget(Dataset):
+    def __init__(self, l1_df, target, sequence_length, prediction_length, hour = False, sep = False, target_mode:str = 'dst_kyoto'):
+        self.sep = sep
+        if sep:
+            self.fc, self.mg = l1_df
+            self.fc_scaler = StandardScaler()
+            self.fc = self.fc_scaler.fit_transform(self.fc.values)
+            self.mg_scaler = StandardScaler()
+            self.mg = self.mg_scaler.fit_transform(self.mg.values)
+        else:
+            self.x_scaler = StandardScaler()
+            self.features = self.x_scaler.fit_transform(l1_df.values)
+        #dst scaler
+        self.y_scaler = StandardScaler() #
+        if target_mode == 'kp_gfz':
+            target = target.apply(map_kp_index_to_interval)
+        self.target = self.y_scaler.fit_transform(target.values.reshape(-1,1))
+        #other parameters
+        self.sequence_length = sequence_length
+        self.mode = hour
+        self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
+        self.sep = sep
+        self.target_mode = target_mode
+    def __len__(self):
+        if self.sep:
+            if self.mode:
+                return self.fc.shape[0] - (self.sequence_length + self.pred_length) + 1
+            else:
+                return self.fc.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+        else:
+            if self.mode:
+                return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
+            else:
+                return self.features.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+    def __getitem__(self, idx):
+        if self.mode:
+            if self.target_mode == 'kp_gfz':
+                target = self.target[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)]
+            elif self.target_mode == 'dst_kyoto':
+                target = self.target[idx+self.sequence_length:idx+self.sequence_length+self.pred_length]
+        else:
+            if self.target_mode == 'kp_gfz':
+                target = self.target[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(self.pred_length)]
+            elif self.target_mode == 'dst_kyoto':
+                target = self.target[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
+        target = torch.tensor(target, dtype=torch.float32).squeeze(1)
+        if self.sep:
+            fc = self.fc[idx:idx+self.sequence_length, :]
+            mg = self.mg[idx:idx+self.sequence_length, :]
+            fc = torch.tensor(fc, dtype=torch.float32)
+            mg = torch.tensor(mg, dtype=torch.float32)
+            return fc, mg, target
+        else:
+            feature = self.features[idx:idx+self.sequence_length, :]
+            feature = torch.tensor(feature, dtype=torch.float32)
+            return feature, target
+    
 
 
