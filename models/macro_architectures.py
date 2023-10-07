@@ -256,7 +256,7 @@ class RefinedArchitecture(nn.Module):
 
 class RNNtoSingleOUT(DefaultBase):
     def __init__(self, encoder, fc):
-        super(NormalArchitecture, self).__init__()
+        super(RNNtoSingleOUT, self).__init__()
         self.encoder = encoder
         self.fc = fc 
     def forward(self, x):
@@ -279,7 +279,7 @@ class RNNtoSingleOUT(DefaultBase):
 
 class MultiHead2SingleOUT(DefaultBase):
     def __init__(self, encoder_fc, encoder_mg, fc):
-        super(NormalArchitecture, self).__init__()
+        super(MultiHead2SingleOUT, self).__init__()
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
         self.fc = fc #sum of both hiddens at input_size
