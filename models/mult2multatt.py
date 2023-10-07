@@ -1,4 +1,4 @@
-from macro_architectures import get_lr
+from models.macro_architectures import get_lr
 from models.utils import *
 import torch.nn.functional as F
 import torch.nn as nn
@@ -82,14 +82,15 @@ class MultiHead2MultiHeadBase(nn.Module):
 class EncoderMultiheadAttentionLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_heads, architecture):
         super(EncoderMultiheadAttentionLSTM, self).__init__()
-        self.hidden_size=hidden_size
+        self.input_size = input_size
+        self.hidden_size= hidden_size
         #attention
         self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
-        self.layer_norm = nn.LayerNorm(hidden_size)
+        self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
         self.lstm = nn.LSTMCell(input_size,hidden_size)
-        self.fc = DeepNeuralNetwork(hidden_size,hidden_size, *architecture)
+        self.fc = DeepNeuralNetwork(hidden_size,input_size, *architecture)
 
     def forward(self, x):
         batch_size, seq_length, _ = x.size()
@@ -99,7 +100,6 @@ class EncoderMultiheadAttentionLSTM(nn.Module):
         attn_out, _ = self.attention(x,x,x)
         #residual connection and layer_norm
         attn_out = self.layer_norm(attn_out+x)
-        
         #encoder
         out_list = []
         for t in range(seq_length):
@@ -109,13 +109,12 @@ class EncoderMultiheadAttentionLSTM(nn.Module):
             out_list.append(out)
         
         out = torch.stack(out_list, dim = 1)
-        
         out = self.layer_norm(out+attn_out)
 
         return out, (hn, cn)
     
 class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
-    def __init__(self, encoder_fc, encoder_mg,num_heads, architecture, output_size):
+    def __init__(self, encoder_fc, encoder_mg,num_heads: list, architecture, output_size):
         super(MultiHeaded2MultiheadAttentionLSTM, self).__init__()
         #hidden
         self.hidden_size = encoder_fc.hidden_size + encoder_mg.hidden_size
@@ -123,19 +122,19 @@ class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
         #MultiheadAttention
-        self.attention_1 = nn.MultiheadAttention(encoder_fc.hidden_size, num_heads, batch_first=True)
-        self.attention_2 = nn.MultiheadAttention(encoder_mg.hidden_size, num_heads, batch_first=True)
+        self.attention_1 = nn.MultiheadAttention(encoder_fc.input_size, num_heads[0], batch_first=True)
+        self.attention_2 = nn.MultiheadAttention(encoder_mg.input_size, num_heads[1], batch_first=True)
         #Decoder arch
-        self.lstm_1 = nn.LSTMCell(encoder_fc.hidden_size, encoder_fc.hidden_size)
-        self.lstm_2 = nn.LSTMCell(encoder_fc.hidden_size, encoder_fc.hidden_size)
-        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.hidden_size, *architecture)
-        self.lstm_3 = nn.LSTMCell(encoder_mg.hidden_size, encoder_mg.hidden_size)
-        self.lstm_4 = nn.LSTMCell(encoder_mg.hidden_size, encoder_mg.hidden_size)
-        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.hidden_size, *architecture)
+        self.lstm_1 = nn.LSTMCell(encoder_fc.input_size, encoder_fc.hidden_size)
+        self.lstm_2 = nn.LSTMCell(encoder_fc.input_size, encoder_fc.hidden_size)
+        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.input_size, *architecture)
+        self.lstm_3 = nn.LSTMCell(encoder_mg.input_size, encoder_mg.hidden_size)
+        self.lstm_4 = nn.LSTMCell(encoder_mg.input_size, encoder_mg.hidden_size)
+        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.input_size, *architecture)
         self.fc = DeepNeuralNetwork(self.hidden_size, output_size, *architecture)
         #layer norm with residual connections(AttentionIsAllYouNeed uses several times on arch)
-        self.layer_norm_1 = nn.LayerNorm(encoder_fc.hidden_size)
-        self.layer_norm_2 = nn.LayerNorm(encoder_mg.hidden_size)
+        self.layer_norm_1 = nn.LayerNorm(encoder_fc.input_size)
+        self.layer_norm_2 = nn.LayerNorm(encoder_mg.input_size)
     def forward(self, fc, mg):
         hn_list = []
         #get dim
@@ -196,13 +195,14 @@ class EncoderMultiheadAttentionGRU(nn.Module):
     def __init__(self, input_size, hidden_size, num_heads, architecture):
         super(EncoderMultiheadAttentionGRU, self).__init__()
         self.hidden_size=hidden_size
+        self.input_size = input_size
         #attention
         self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first = True)
-        self.layer_norm = nn.LayerNorm(hidden_size)
+        self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
         self.gru = nn.GRUCell(input_size,hidden_size)
-        self.fc = DeepNeuralNetwork(hidden_size,hidden_size, *architecture)
+        self.fc = DeepNeuralNetwork(hidden_size,input_size, *architecture)
 
     def forward(self, x):
         batch_size, seq_length, _ = x.size()
@@ -226,7 +226,7 @@ class EncoderMultiheadAttentionGRU(nn.Module):
 
         return out, hn
 class MultiHeaded2MultiheadAttentionGRU(MultiHead2MultiHeadBase):
-    def __init__(self, encoder_fc, encoder_mg,num_heads, architecture, output_size):
+    def __init__(self, encoder_fc, encoder_mg,num_heads: list, architecture, output_size):
         super(MultiHeaded2MultiheadAttentionGRU, self).__init__()
         #hidden
         self.hidden_size = encoder_fc.hidden_size + encoder_mg.hidden_size
@@ -234,19 +234,19 @@ class MultiHeaded2MultiheadAttentionGRU(MultiHead2MultiHeadBase):
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
         #MultiheadAttention
-        self.attention_1 = nn.MultiheadAttention(encoder_fc.hidden_size, num_heads, batch_first=True)
-        self.attention_2 = nn.MultiheadAttention(self.hidden_size, num_heads, batch_first=True)
+        self.attention_1 = nn.MultiheadAttention(encoder_fc.input_size, num_heads[0], batch_first=True)
+        self.attention_2 = nn.MultiheadAttention(encoder_mg.input_size, num_heads[1], batch_first=True)
         #Decoder arch
-        self.gru_1 = nn.GRUCell(encoder_fc.hidden_size, encoder_fc.hidden_size)
-        self.gru_2 = nn.GRUCell(encoder_fc.hidden_size, encoder_fc.hidden_size)
-        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.hidden_size, *architecture)
-        self.gru_3 = nn.GRUCell(encoder_mg.hidden_size, encoder_mg.hidden_size)
-        self.gru_4 = nn.GRUCell(encoder_mg.hidden_size, encoder_mg.hidden_size)
-        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.hidden_size, *architecture)
+        self.gru_1 = nn.GRUCell(encoder_fc.input_size, encoder_fc.hidden_size)
+        self.gru_2 = nn.GRUCell(encoder_fc.input_size, encoder_fc.hidden_size)
+        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.input_size, *architecture)
+        self.gru_3 = nn.GRUCell(encoder_mg.input_size, encoder_mg.hidden_size)
+        self.gru_4 = nn.GRUCell(encoder_mg.input_size, encoder_mg.hidden_size)
+        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.input_size, *architecture)
         self.fc = DeepNeuralNetwork(self.hidden_size, output_size, *architecture)
         #layer norm with residual connections(AttentionIsAllYouNeed uses several times on arch)
-        self.layer_norm_1 = nn.LayerNorm(encoder_fc.hidden_size)
-        self.layer_norm_2 = nn.LayerNorm(encoder_mg.hidden_size)
+        self.layer_norm_1 = nn.LayerNorm(encoder_fc.input_size)
+        self.layer_norm_2 = nn.LayerNorm(encoder_mg.input_size)
     def forward(self, fc, mg):
         hn_list = []
         #get dim

@@ -119,6 +119,7 @@ class Seq2SeqLSTM(SingleHead2MultiHead):
 class GRUSeq2Seq(SingleHead2MultiHead):
     def __init__(self, input_size, hidden_size, output_size, num_heads):
         super(GRUSeq2Seq, self).__init__()
+        self.hidden_size = hidden_size
         self.gru_1 = nn.GRUCell(input_size, hidden_size)
         self.fc_1 = nn.Linear(hidden_size, input_size)
 
@@ -135,7 +136,7 @@ class GRUSeq2Seq(SingleHead2MultiHead):
         out_list = []
         for i in range(seq_length):
             xt = x[:,i,:]
-            hn,cn = self.gru_1(xt, (hn,cn))
+            hn = self.gru_1(xt, hn)
             out = self.fc_1(hn)
             out_list.append(out)
         
@@ -147,7 +148,7 @@ class GRUSeq2Seq(SingleHead2MultiHead):
         # Decoding
         for i in range(seq_length):
             xt = attention_output[:,i,:]
-            hn,cn = self.gru_2(xt, (hn,cn))
+            hn = self.gru_2(xt, hn)
         
         out = self.fc_2(hn)
 
