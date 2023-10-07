@@ -249,12 +249,12 @@ class MainToSingleTarget(Dataset):
             if self.mode:
                 return self.fc.shape[0] - (self.sequence_length + self.pred_length) + 1
             else:
-                return self.fc.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+                return self.fc.shape[0] - 60*(self.sequence_length + self.pred_length) + 1
         else:
             if self.mode:
                 return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
             else:
-                return self.features.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+                return self.features.shape[0] - 60*(self.sequence_length + self.pred_length) + 1
     def __getitem__(self, idx):
         if self.mode:
             if self.target_mode == 'kp_gfz':
