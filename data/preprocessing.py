@@ -120,13 +120,16 @@ def automated_preprocessing(scrap_date: list, sep = False):
             magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{filename[:-6]}.csv')
             os.remove(output_file)
 
-    level_1, level_2 = from_csv(sep)
+    start_time =scrap_date[0]
+    end_time = scrap_date[-1]
+
+    level_1, level_2 = from_csv(start_time, end_time, sep)
 
     dst, kp = import_targets(scrap_date)
 
     return level_1, level_2,dst, kp
 
-def from_csv(sep = False):
+def from_csv(start_time, end_time, sep = False):
     fc1_list = []
     for file in os.listdir('data/DSCOVR_L1/faraday'):
         file = os.path.join('data/DSCOVR_L1/faraday', file)
@@ -155,6 +158,22 @@ def from_csv(sep = False):
     mg1 = pd.concat(mg1_list)
     f1m = pd.concat(f1m_list)
     m1m = pd.concat(m1m_list)
+    fc1 = fc1[~fc1.index.duplicated(keep='first')]
+    mg1 = mg1[~mg1.index.duplicated(keep='first')]
+    f1m = f1m[~f1m.index.duplicated(keep='first')]
+    m1m = m1m[~m1m.index.duplicated(keep='first')]
+    fc1.index = pd.to_datetime(fc1.index)
+    mg1.index = pd.to_datetime(mg1.index)
+    f1m.index = pd.to_datetime(f1m.index)
+    m1m.index = pd.to_datetime(m1m.index)
+    start_time_ = f'{start_time[:4]}-{start_time[4:6]}-{start_time[-2:]} 00:00:00'
+    end_time_ = f'{end_time[:4]}-{end_time[4:6]}-{end_time[-2:]} 23:59:00' 
+    freq = '1T'
+    full_time_index = pd.date_range(start=start_time_, end=end_time_, freq=freq)
+    fc1 = fc1.reindex(full_time_index).interpolate(method = 'linear')
+    mg1 = mg1.reindex(full_time_index).interpolate(method = 'linear')
+    f1m = f1m.reindex(full_time_index).interpolate(method = 'linear')
+    m1m = m1m.reindex(full_time_index).interpolate(method = 'linear')
     if sep:
         level_1 = (fc1, mg1)
         level_2 = (f1m, m1m)
