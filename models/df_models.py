@@ -7,14 +7,14 @@ class Simple1DCNN(nn.Module):
     def __init__(self,architecture, input_size, hidden_size, num_heads = None, kernel_size=3, stride=2):
         super(Simple1DCNN, self).__init__()
         self.hidden_size = hidden_size
-        self.conv1d = nn.Conv1d(input_size, 10, kernel_size, stride)
-        self.relu = nn.ReLU()
-        self.maxpool = nn.MaxPool1d(kernel_size=2, stride=2)
-        self.fc = DeepNeuralNetwork(40, hidden_size,*architecture)
+        self.conv1d = nn.Conv1d(input_size, 10, kernel_size, stride).to('cuda')
+        self.relu = nn.ReLU().to('cuda')
+        self.maxpool = nn.MaxPool1d(kernel_size=2, stride=2).to('cuda')
+        self.fc = DeepNeuralNetwork(40, hidden_size,*architecture).to('cuda')
         ##add attention
         self.num_heads = num_heads
         if num_heads is not None:
-            self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
+            self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True).to('cuda')
     def forward(self, x):
         if self.num_heads is not None:
             x,_ = self.attention(x,x,x)
@@ -31,9 +31,9 @@ class DeepVanillaRNN(nn.Module):
         super(DeepVanillaRNN, self).__init__()
         self.hidden_size = hidden_size
         self.at = attention
-        self.hidden_mlp = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.input_mlp = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
-        self.attention = Attention(self.hidden_size)
+        self.hidden_mlp = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture).to('cuda')
+        self.input_mlp = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture).to('cuda')
+        self.attention = Attention(self.hidden_size).to('cuda')
         ##add attention
     def forward(self,x):
         batch_size, seq_len, _ = x.size()
@@ -64,22 +64,22 @@ class DeepLSTM(nn.Module):
         self.hidden_size = hidden_size
         self.at = attention
         #Forget gate
-        self.F_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.F_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
+        self.F_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture).to('cuda')
+        self.F_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture).to('cuda')
         #Input gate
-        self.I_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.I_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
+        self.I_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture).to('cuda')
+        self.I_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture).to('cuda')
         #Ouput gate
-        self.O_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.O_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
+        self.O_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture).to('cuda')
+        self.O_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture).to('cuda')
         #Input node
-        self.C_hat_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.C_hat_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)  
-        self.attention = Attention(self.hidden_size)      
+        self.C_hat_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture).to('cuda')
+        self.C_hat_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture).to('cuda')
+        self.attention = Attention(self.hidden_size).to('cuda')
     def forward(self,x):
         batch_size, sequence_size, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
-        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
+        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         hn_list = []
 
         for t in range(sequence_size):
@@ -109,20 +109,20 @@ class DeepGRU(nn.Module):
     def __init__(self, hidden_size, input_size, mlp_architecture, attention):
         super(DeepGRU, self).__init__()
         self.hidden_size = hidden_size
-        self.attention = Attention(self.hidden_size)
+        self.attention = Attention(self.hidden_size).to('cuda')
         self.at = attention
         #Update gate
-        self.Z_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.Z_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
+        self.Z_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture).to('cuda')
+        self.Z_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture).to('cuda')
         #Reset gate
-        self.R_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.R_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
+        self.R_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture).to('cuda')
+        self.R_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture).to('cuda')
         #Possible hidden state
-        self.H_hat_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture)
-        self.H_hat_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture)
+        self.H_hat_h = DeepNeuralNetwork(hidden_size, hidden_size, *mlp_architecture).to('cuda')
+        self.H_hat_x = DeepNeuralNetwork(input_size, hidden_size, *mlp_architecture).to('cuda')
     def forward(self, x):
         batch_size, sequence_size, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         hn_list = []
         for t in range(sequence_size):
             xt = x[:, t, :]
@@ -144,13 +144,13 @@ class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, attention = True):
         super(LSTM, self).__init__()
         self.hidden_size = hidden_size
-        self.lstm = nn.LSTMCell(input_size, hidden_size)
-        self.attention = Attention(self.hidden_size)
+        self.lstm = nn.LSTMCell(input_size, hidden_size).to('cuda')
+        self.attention = Attention(self.hidden_size).to('cuda')
         self.at = attention
     def forward(self, x):
         batch_size, sequence_size, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
-        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
+        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         hn_list = []
         for t in range(sequence_size):
             
@@ -169,12 +169,12 @@ class GRU(nn.Module):
     def __init__(self, input_size, hidden_size, attention):
         super(GRU, self).__init__()
         self.hidden_size = hidden_size
-        self.gru = nn.GRUCell(input_size, hidden_size)
-        self.attention = Attention(self.hidden_size)
+        self.gru = nn.GRUCell(input_size, hidden_size).to('cuda')
+        self.attention = Attention(self.hidden_size).to('cuda')
         self.at = attention
     def forward(self, x):
         batch_size, sequence_size, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         hn_list = []
         for t in range(sequence_size):
             
@@ -195,13 +195,13 @@ class VanillaRNN(nn.Module):
     def __init__(self, input_size, hidden_size, attention = True):
         super(VanillaRNN, self).__init__()
         self.hidden_size = hidden_size
-        self.rnn = nn.RNNCell(input_size, hidden_size)
-        self.attention = Attention(self.hidden_size)
+        self.rnn = nn.RNNCell(input_size, hidden_size).to('cuda')
+        self.attention = Attention(self.hidden_size).to('cuda')
         self.at = attention
     
     def forward(self, x):
         batch_size, sequence_size, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         hn_list = []
         for t in range(sequence_size):
             

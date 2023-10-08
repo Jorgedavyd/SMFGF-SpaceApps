@@ -6,7 +6,7 @@ def  SingularLayer(input_size, output):
     out = nn.Sequential(
         nn.Linear(input_size, output),
         nn.ReLU(True)
-    )
+    ).to('cuda')
     return out
 
 class DeepNeuralNetwork(nn.Module):
@@ -20,7 +20,7 @@ class DeepNeuralNetwork(nn.Module):
             input_size = output
 
         #Model output layer
-        self.output_layer = nn.Sequential(nn.Linear(input_size, output_size))
+        self.output_layer = nn.Sequential(nn.Linear(input_size, output_size)).to('cuda')
         if activation is not None:
             self.output_layer.add_module(activation)
     def forward(self, xb):
@@ -33,7 +33,7 @@ class Attention(nn.Module):
     def __init__(self, hidden_size):
         super(Attention, self).__init__()
         self.hidden_size = hidden_size
-        self.attention_layer = nn.Linear(hidden_size, hidden_size)
+        self.attention_layer = nn.Linear(hidden_size, hidden_size).to('cuda')
         
     def forward(self, hidden_states):
         attention_weights = self.attention_layer(hidden_states)

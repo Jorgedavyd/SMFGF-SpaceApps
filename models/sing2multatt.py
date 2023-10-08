@@ -80,20 +80,20 @@ class Seq2SeqLSTM(SingleHead2MultiHead):
     def __init__(self, input_size, hidden_size, output_size, num_heads): #input 20, #hidden 10, #pred_length with transformation
         super(Seq2SeqLSTM, self).__init__()
         self.hidden_size = hidden_size
-        self.lstm_1 = nn.LSTMCell(input_size, hidden_size)
-        self.fc_1 = nn.Linear(hidden_size, input_size)
+        self.lstm_1 = nn.LSTMCell(input_size, hidden_size).to('cuda')
+        self.fc_1 = nn.Linear(hidden_size, input_size).to('cuda')
 
         ## Attention mechanism 
-        self.attention_2 = nn.MultiheadAttention(input_size, num_heads, batch_first = True)
+        self.attention_2 = nn.MultiheadAttention(input_size, num_heads, batch_first = True).to('cuda')
         # Decoder
 
-        self.lstm_2 = nn.LSTMCell(input_size, hidden_size) #encoders[0].hidden_size*len(encoders) hidden_sizeto hidden_size
-        self.fc_2 = nn.Linear(hidden_size, output_size)
+        self.lstm_2 = nn.LSTMCell(input_size, hidden_size).to('cuda') #encoders[0].hidden_size*len(encoders) hidden_sizeto hidden_size
+        self.fc_2 = nn.Linear(hidden_size, output_size).to('cuda')
 
     def forward(self, x):
         batch_size, seq_length, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
-        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
+        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         out_list = []
         for i in range(seq_length):
             xt = x[:,i,:]
@@ -120,19 +120,19 @@ class GRUSeq2Seq(SingleHead2MultiHead):
     def __init__(self, input_size, hidden_size, output_size, num_heads):
         super(GRUSeq2Seq, self).__init__()
         self.hidden_size = hidden_size
-        self.gru_1 = nn.GRUCell(input_size, hidden_size)
-        self.fc_1 = nn.Linear(hidden_size, input_size)
+        self.gru_1 = nn.GRUCell(input_size, hidden_size).to('cuda')
+        self.fc_1 = nn.Linear(hidden_size, input_size).to('cuda')
 
         ## Attention mechanism 
-        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first = True)
+        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first = True).to('cuda')
         # Decoder
 
-        self.gru_2 = nn.GRUCell(input_size, hidden_size) #encoders[0].hidden_size*len(encoders) hidden_sizeto hidden_size
-        self.fc_2 = nn.Linear(hidden_size, output_size)
+        self.gru_2 = nn.GRUCell(input_size, hidden_size).to('cuda') #encoders[0].hidden_size*len(encoders) hidden_sizeto hidden_size
+        self.fc_2 = nn.Linear(hidden_size, output_size).to('cuda')
 
     def forward(self, x):
         batch_size, seq_length, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         out_list = []
         for i in range(seq_length):
             xt = x[:,i,:]

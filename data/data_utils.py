@@ -5,9 +5,9 @@ from sklearn.preprocessing import StandardScaler
 import numpy as np
 
 def min_to_hour(idx):
-    return int(np.ceil(idx/60))
+    return int(np.floor(idx/60))
 def hour_to_3_hour(idx):
-    return int(np.ceil(idx/3))
+    return int(np.floor(idx/3))
 
 def map_kp_index_to_interval(kp_index):
     kp_mapping = {

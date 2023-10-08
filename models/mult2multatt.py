@@ -85,17 +85,17 @@ class EncoderMultiheadAttentionLSTM(nn.Module):
         self.input_size = input_size
         self.hidden_size= hidden_size
         #attention
-        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
-        self.layer_norm = nn.LayerNorm(input_size)
+        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True).to('cuda')
+        self.layer_norm = nn.LayerNorm(input_size).to('cuda')
         
         #encoder
-        self.lstm = nn.LSTMCell(input_size,hidden_size)
-        self.fc = DeepNeuralNetwork(hidden_size,input_size, *architecture)
+        self.lstm = nn.LSTMCell(input_size,hidden_size).to('cuda')
+        self.fc = DeepNeuralNetwork(hidden_size,input_size, *architecture).to('cuda')
 
     def forward(self, x):
         batch_size, seq_length, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
-        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
+        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         #Multihead attention
         attn_out, _ = self.attention(x,x,x)
         #residual connection and layer_norm
@@ -122,19 +122,19 @@ class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
         #MultiheadAttention
-        self.attention_1 = nn.MultiheadAttention(encoder_fc.input_size, num_heads[0], batch_first=True)
-        self.attention_2 = nn.MultiheadAttention(encoder_mg.input_size, num_heads[1], batch_first=True)
+        self.attention_1 = nn.MultiheadAttention(encoder_fc.input_size, num_heads[0], batch_first=True).to('cuda')
+        self.attention_2 = nn.MultiheadAttention(encoder_mg.input_size, num_heads[1], batch_first=True).to('cuda')
         #Decoder arch
-        self.lstm_1 = nn.LSTMCell(encoder_fc.input_size, encoder_fc.hidden_size)
-        self.lstm_2 = nn.LSTMCell(encoder_fc.input_size, encoder_fc.hidden_size)
-        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.input_size, *architecture)
-        self.lstm_3 = nn.LSTMCell(encoder_mg.input_size, encoder_mg.hidden_size)
-        self.lstm_4 = nn.LSTMCell(encoder_mg.input_size, encoder_mg.hidden_size)
-        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.input_size, *architecture)
-        self.fc = DeepNeuralNetwork(self.hidden_size, output_size, *architecture)
+        self.lstm_1 = nn.LSTMCell(encoder_fc.input_size, encoder_fc.hidden_size).to('cuda')
+        self.lstm_2 = nn.LSTMCell(encoder_fc.input_size, encoder_fc.hidden_size).to('cuda')
+        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.input_size, *architecture).to('cuda')
+        self.lstm_3 = nn.LSTMCell(encoder_mg.input_size, encoder_mg.hidden_size).to('cuda')
+        self.lstm_4 = nn.LSTMCell(encoder_mg.input_size, encoder_mg.hidden_size).to('cuda')
+        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.input_size, *architecture).to('cuda')
+        self.fc = DeepNeuralNetwork(self.hidden_size, output_size, *architecture).to('cuda')
         #layer norm with residual connections(AttentionIsAllYouNeed uses several times on arch)
-        self.layer_norm_1 = nn.LayerNorm(encoder_fc.input_size)
-        self.layer_norm_2 = nn.LayerNorm(encoder_mg.input_size)
+        self.layer_norm_1 = nn.LayerNorm(encoder_fc.input_size).to('cuda')
+        self.layer_norm_2 = nn.LayerNorm(encoder_mg.input_size).to('cuda')
     def forward(self, fc, mg):
         hn_list = []
         #get dim
@@ -197,16 +197,16 @@ class EncoderMultiheadAttentionGRU(nn.Module):
         self.hidden_size=hidden_size
         self.input_size = input_size
         #attention
-        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first = True)
-        self.layer_norm = nn.LayerNorm(input_size)
+        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first = True).to('cuda')
+        self.layer_norm = nn.LayerNorm(input_size).to('cuda')
         
         #encoder
-        self.gru = nn.GRUCell(input_size,hidden_size)
-        self.fc = DeepNeuralNetwork(hidden_size,input_size, *architecture)
+        self.gru = nn.GRUCell(input_size,hidden_size).to('cuda')
+        self.fc = DeepNeuralNetwork(hidden_size,input_size, *architecture).to('cuda')
 
     def forward(self, x):
         batch_size, seq_length, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True)
+        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         #Multihead attention
         attn_out, _ = self.attention(x,x,x)
         #residual connection and layer_norm
@@ -234,19 +234,19 @@ class MultiHeaded2MultiheadAttentionGRU(MultiHead2MultiHeadBase):
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
         #MultiheadAttention
-        self.attention_1 = nn.MultiheadAttention(encoder_fc.input_size, num_heads[0], batch_first=True)
-        self.attention_2 = nn.MultiheadAttention(encoder_mg.input_size, num_heads[1], batch_first=True)
+        self.attention_1 = nn.MultiheadAttention(encoder_fc.input_size, num_heads[0], batch_first=True).to('cuda')
+        self.attention_2 = nn.MultiheadAttention(encoder_mg.input_size, num_heads[1], batch_first=True).to('cuda')
         #Decoder arch
-        self.gru_1 = nn.GRUCell(encoder_fc.input_size, encoder_fc.hidden_size)
-        self.gru_2 = nn.GRUCell(encoder_fc.input_size, encoder_fc.hidden_size)
-        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.input_size, *architecture)
-        self.gru_3 = nn.GRUCell(encoder_mg.input_size, encoder_mg.hidden_size)
-        self.gru_4 = nn.GRUCell(encoder_mg.input_size, encoder_mg.hidden_size)
-        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.input_size, *architecture)
-        self.fc = DeepNeuralNetwork(self.hidden_size, output_size, *architecture)
+        self.gru_1 = nn.GRUCell(encoder_fc.input_size, encoder_fc.hidden_size).to('cuda')
+        self.gru_2 = nn.GRUCell(encoder_fc.input_size, encoder_fc.hidden_size).to('cuda')
+        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.input_size, *architecture).to('cuda')
+        self.gru_3 = nn.GRUCell(encoder_mg.input_size, encoder_mg.hidden_size).to('cuda')
+        self.gru_4 = nn.GRUCell(encoder_mg.input_size, encoder_mg.hidden_size).to('cuda')
+        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.input_size, *architecture).to('cuda')
+        self.fc = DeepNeuralNetwork(self.hidden_size, output_size, *architecture).to('cuda')
         #layer norm with residual connections(AttentionIsAllYouNeed uses several times on arch)
-        self.layer_norm_1 = nn.LayerNorm(encoder_fc.input_size)
-        self.layer_norm_2 = nn.LayerNorm(encoder_mg.input_size)
+        self.layer_norm_1 = nn.LayerNorm(encoder_fc.input_size).to('cuda')
+        self.layer_norm_2 = nn.LayerNorm(encoder_mg.input_size).to('cuda')
     def forward(self, fc, mg):
         hn_list = []
         #get dim
