@@ -1,304 +1,302 @@
-from models.macro_architectures import get_lr
 from models.utils import *
+from models.df_models import *
 import torch.nn.functional as F
-import torch.nn as nn
-import torch
+from sklearn.metrics import r2_score
+from models.base import *
+def r2(y_pred, y_true):
+    # Calculate the mean of the true values
+    mean = torch.mean(y_true)
 
-#training for seq2seq with feature separation
-class MultiHead2MultiHeadBase(nn.Module):
-    def training_step(self, batch):
-        fc, mg, target = batch #decompose batch
-        pred = self(fc, mg)        
-        #dst index or kp
-        loss = F.mse_loss(pred, target)
+    # Calculate the total sum of squares
+    ss_total = torch.sum((y_true - mean) ** 2)
+
+    # Calculate the residual sum of squares
+    ss_residual = torch.sum((y_true - y_pred) ** 2)
+
+    # Calculate R2 score
+    r2 = 1 - (ss_residual / ss_total)
+    
+    return r2
+
+def threshold_predictions(predictions, threshold=-2.6):
+    # Convert regression predictions to binary (0 or 1) based on the threshold
+    binary_predictions = (predictions <= threshold).float()
+    return binary_predictions
+
+def acc(predictions, targets, threshold=-2.6):
+    binary_predictions = threshold_predictions(predictions, threshold)
+    correct = (binary_predictions == targets).sum().item()
+    total = targets.size(0)
+    accuracy = correct / total
+    return accuracy
+
+def compute_precision(predictions, targets, threshold=-2.6):
+    binary_predictions = threshold_predictions(predictions, threshold)
+    binary_targets = threshold_predictions(targets, threshold)
+    true_positives = ((binary_predictions == 1) & (binary_targets == 1)).sum()
+    false_positives = ((binary_predictions == 1) & (binary_targets == 0)).sum()
+    try:
+        precision = true_positives / (true_positives + false_positives)
+    except ZeroDivisionError:   
+        precision = torch.tensor([0])
+    return precision
+
+def compute_recall(predictions, targets, threshold=-2.6):
+    binary_predictions = threshold_predictions(predictions, threshold)
+    binary_targets = threshold_predictions(targets, threshold)
+    true_positives = ((binary_predictions == 1) & (binary_targets == 1)).sum()
+    false_negatives = ((binary_predictions == 0) & (binary_targets == 1)).sum()
+    recall = true_positives / (true_positives + false_negatives)
+    return recall
+
+def compute_all(predictions, targets, threshold=-2.6):
+    precision = compute_precision(predictions, targets, threshold)
+    recall = compute_recall(predictions, targets, threshold)
+    f1_score = 2 * (precision * recall) / (precision + recall)
+    return precision, recall, f1_score
+
+class MultiHead2MultiHeadBase(GeoBase):
+    def training_step(self, batch, weights:list, encoder_forcing):
+        self.encoder_forcing = encoder_forcing
+        if encoder_forcing:
+            if isinstance(self, MultiHeaded2MultiheadAttentionLSTM):
+                #instantiate loss
+                loss = 0
+                alpha_fc, alpha_mg, alpha_out, alpha_main = weights
+                fc1, mg1, f1m, m1m, target = batch #decompose batch
+                #encoder forcing for faraday cup
+                out_fc_L1, (hn_fc_L1, cn_fc_L1) = self.encoder_fc(fc1)
+                out_fc_L2, (hn_fc_L2, cn_fc_L2) = self.encoder_fc(f1m)
+                loss += F.mse_loss(out_fc_L1, out_fc_L2)*alpha_fc
+                ctx_fc_L1, _ = self.attention_1(out_fc_L1,out_fc_L1, out_fc_L1)
+                out_fc_L1 = self.layer_norm_1(ctx_fc_L1+out_fc_L1)
+                ctx_fc_L2, _ = self.attention_1(out_fc_L2,out_fc_L2, out_fc_L2)
+                out_fc_L2 = self.layer_norm_1(ctx_fc_L2+out_fc_L2)
+                #encoder forcing for magnetometer
+                out_mg_L1, (hn_mg_L1, cn_mg_L1) = self.encoder_mg(mg1)
+                out_mg_L2, (hn_mg_L2, cn_mg_L2) = self.encoder_mg(m1m)
+                loss += F.mse_loss(out_mg_L1, out_mg_L2)*alpha_mg
+                ctx_mg_L1, _ = self.attention_2(out_mg_L1,out_mg_L1, out_mg_L1)
+                out_mg_L1 = self.layer_norm_2(ctx_mg_L1+out_mg_L1)
+                ctx_mg_L2, _ = self.attention_2(out_mg_L2,out_mg_L2, out_mg_L2)
+                out_mg_L2 = self.layer_norm_2(ctx_mg_L2+ out_mg_L2)
+                #concat both encoder outputs
+                hn_L1 = torch.cat([hn_fc_L1, hn_mg_L1], dim = -1)
+                cn_L1 = torch.cat([cn_fc_L1, cn_mg_L1], dim = -1)
+                out_L1 = torch.cat([out_fc_L1, out_mg_L1], dim = -1)
+                out_L1, (_,_) = self.decoder(out_L1, hn_L1, cn_L1)
+                out_L1 = self.fc(out_L1[:,-1,:])
+                hn_L2 = torch.cat([hn_fc_L2, hn_mg_L2], dim = -1)
+                cn_L2 = torch.cat([cn_fc_L2, cn_mg_L2], dim = -1)
+                out_L2 = torch.cat([out_fc_L2, out_mg_L2], dim = -1)
+                out_L2, (_,_) = self.decoder(out_L2, hn_L2, cn_L2)
+                out_L2 = self.fc(out_L2[:,-1,:])
+                loss += F.mse_loss(out_L1, out_L2)*alpha_out
+                loss += F.mse_loss(out_L1, target)*alpha_main
+            elif isinstance(self, MultiHeaded2MultiheadAttentionGRU):
+                #instantiate loss
+                loss = 0
+                alpha_fc, alpha_mg, alpha_out, alpha_main = weights
+                fc1, mg1, f1m, m1m, target = batch #decompose batch
+                #encoder forcing for faraday cup
+                out_fc_L1, hn_fc_L1 = self.encoder_fc(fc1)
+                out_fc_L2, hn_fc_L2 = self.encoder_fc(f1m)
+                loss += F.mse_loss(out_fc_L1, out_fc_L2)*alpha_fc
+                ctx_fc_L1, _ = self.attention_1(out_fc_L1,out_fc_L1, out_fc_L1)
+                out_fc_L1 = self.layer_norm_1(ctx_fc_L1+out_fc_L1)
+                ctx_fc_L2, _ = self.attention_1(out_fc_L2,out_fc_L2, out_fc_L2)
+                out_fc_L2 = self.layer_norm_1(ctx_fc_L2+out_fc_L2)
+                #encoder forcing for magnetometer
+                out_mg_L1, hn_mg_L1 = self.encoder_mg(mg1)
+                out_mg_L2, hn_mg_L2 = self.encoder_mg(m1m)
+                loss += F.mse_loss(out_mg_L1, out_mg_L2)*alpha_mg
+                ctx_mg_L1, _ = self.attention_2(out_mg_L1,out_mg_L1, out_mg_L1)
+                out_mg_L1 = self.layer_norm_2(ctx_mg_L1+out_mg_L1)
+                ctx_mg_L2, _ = self.attention_2(out_mg_L2,out_mg_L2, out_mg_L2)
+                out_mg_L2 = self.layer_norm_2(ctx_mg_L2+ out_mg_L2)
+                #concat both encoder outputs
+                hn_L1 = torch.cat([hn_fc_L1, hn_mg_L1], dim = -1)
+                out_L1 = torch.cat([out_fc_L1, out_mg_L1], dim = -1)
+                out_L1, _ = self.decoder(out_L1, hn_L1)
+                out_L1 = self.fc(out_L1[:,-1,:])
+                hn_L2 = torch.cat([hn_fc_L2, hn_mg_L2], dim = -1)
+                out_L2 = torch.cat([out_fc_L2, out_mg_L2], dim = -1)
+                out_L2, _ = self.decoder(out_L2, hn_L2)
+                out_L2 = self.fc(out_L2[:,-1,:])
+                loss += F.mse_loss(out_L1, out_L2)*alpha_out
+                loss += F.mse_loss(out_L1, target)*alpha_main
+        else:
+            fc1, mg1, target = batch
+            out = self(fc1, mg1)
+            loss = F.mse_loss(out, target)
         return loss
-
     def validation_step(self, batch):
-        fc, mg, target = batch #decompose batch
+        if self.encoder_forcing:
+            fc, mg,_,_, target = batch #decompose batch
+        else:
+            fc, mg, target = batch 
         pred = self(fc, mg)        
         #dst index or kp
         loss = F.mse_loss(pred, target)
-        return {'val_loss': loss.detach()}
+        r2_ = r2(pred, target)
+        precision, recall, f1_score = compute_all(pred, target)
+        return {'val_loss': loss.detach(),'r2': r2_.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score}
 
-    def validation_epoch_end(self, outputs):
-        batch_losses = [x['val_loss'] for x in outputs]
-        epoch_loss = torch.stack(batch_losses).mean()   # Sacar el valor expectado de todo el conjunto de costos
-        return {'val_loss': epoch_loss.item()}
-
-    def epoch_end(self, epoch, result): # Seguimiento del entrenamiento
-        print("Epoch [{}]:\n\tlast_lr: {:.5f}\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}".format(
-            epoch, result['lrs'][-1], result['train_loss'], result['val_loss']))
-    
-    def evaluate(self, val_loader):
-        self.eval()
-        outputs = [self.validation_step(batch) for batch in val_loader]
-        return self.validation_epoch_end(outputs)
-    
-    def fit(self, epochs, max_lr, train_loader, val_loader,
-                  weight_decay=0, grad_clip=False, opt_func=torch.optim.Adam):
-        torch.cuda.empty_cache()
-        history = [] # Seguimiento de entrenamiento
-
-        # Poner el método de minimización personalizado
-        optimizer = opt_func(self.parameters(), max_lr, weight_decay=weight_decay)
-        # Learning rate scheduler, le da momento inicial al entrenamiento para converger con valores menores al final
-        sched = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr, epochs=epochs,
-                                                    steps_per_epoch=len(train_loader))
-
-        for epoch in range(epochs):
-            # Training Phase
-            self.train()  #Activa calcular los vectores gradiente
-            train_losses = []
-            lrs = [] # Seguimiento
-            for batch in train_loader:
-                # Calcular el costo
-                loss = self.training_step(batch)
-                #Seguimiento
-                train_losses.append(loss)
-                #Calcular las derivadas parciales
-                loss.backward()
-
-                # Gradient clipping, para que no ocurra el exploding gradient
-                if grad_clip:
-                    nn.utils.clip_grad_value_(self.parameters(), grad_clip)
-
-                #Efectuar el descensod e gradiente y borrar el historial
-                optimizer.step()
-                optimizer.zero_grad()
-
-                # Guardar el learning rate utilizado en el cycle.
-                lrs.append(get_lr(optimizer))
-                #Utilizar el siguiente valor de learning rate dado OneCycle scheduler
-                sched.step()
-
-            # Fase de validación
-            result = self.evaluate(val_loader)
-            result['train_loss'] = torch.stack(train_losses).mean().item() #Stackea todos los costos de las iteraciones sobre los batches y los guarda como la pérdida general de la época
-            result['lrs'] = lrs #Guarda la lista de learning rates de cada batch
-            self.epoch_end(epoch, result) #imprimir en pantalla el seguimiento
-            history.append(result) # añadir a la lista el diccionario de resultados
-        return history
-#LSTMs with multihead attention incorporated
 class EncoderMultiheadAttentionLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_heads, architecture):
+    def __init__(self, input_size, hidden_size, num_heads, num_layers = 1, dropout = 0, bidirectional = True):
         super(EncoderMultiheadAttentionLSTM, self).__init__()
         self.input_size = input_size
         self.hidden_size= hidden_size
         #attention
-        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True).to('cuda')
-        self.layer_norm = nn.LayerNorm(input_size).to('cuda')
+        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
+        self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
-        self.lstm = nn.LSTMCell(input_size,hidden_size).to('cuda')
-        self.fc = DeepNeuralNetwork(hidden_size,input_size, *architecture).to('cuda')
+        self.lstm = nn.LSTM(input_size = input_size, hidden_size = hidden_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
 
     def forward(self, x):
-        batch_size, seq_length, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
-        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         #Multihead attention
         attn_out, _ = self.attention(x,x,x)
         #residual connection and layer_norm
         attn_out = self.layer_norm(attn_out+x)
-        #encoder
-        out_list = []
-        for t in range(seq_length):
-            xt = attn_out[:,t,:]
-            hn,cn = self.lstm(xt, (hn,cn))
-            out = self.fc(hn)
-            out_list.append(out)
-        
-        out = torch.stack(out_list, dim = 1)
-        out = self.layer_norm(out+attn_out)
+        #LSTM
+        out, (hn,cn) = self.lstm(attn_out)
+        #return outputs
+        return out, (hn, cn)
 
+class DecoderMultiheadAttentionLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, num_heads, num_layers = 1, dropout = 0, bidirectional = True):
+        super(DecoderMultiheadAttentionLSTM, self).__init__()
+        self.input_size = input_size
+        self.hidden_size= hidden_size
+        #attention
+        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
+        self.layer_norm = nn.LayerNorm(input_size)
+        
+        #encoder
+        self.lstm = nn.LSTM(input_size = input_size, hidden_size = hidden_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
+
+    def forward(self, x, hn ,cn):
+        #LSTM
+        out, (hn,cn) = self.lstm(x, (hn,cn))
+        context, _ = self.attention(out, out, out)
+        out = self.layer_norm(context+out)
+        #return outputs
         return out, (hn, cn)
     
+
 class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
-    def __init__(self, encoder_fc, encoder_mg,num_heads: list, architecture, output_size):
+    def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, output_size):
         super(MultiHeaded2MultiheadAttentionLSTM, self).__init__()
         #hidden
-        self.hidden_size = encoder_fc.hidden_size + encoder_mg.hidden_size
+        self.input_size = encoder_fc.hidden_size + encoder_mg.hidden_size
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
+        self.decoder = decoder
         #MultiheadAttention
-        self.attention_1 = nn.MultiheadAttention(encoder_fc.input_size, num_heads[0], batch_first=True).to('cuda')
-        self.attention_2 = nn.MultiheadAttention(encoder_mg.input_size, num_heads[1], batch_first=True).to('cuda')
-        #Decoder arch
-        self.lstm_1 = nn.LSTMCell(encoder_fc.input_size, encoder_fc.hidden_size).to('cuda')
-        self.lstm_2 = nn.LSTMCell(encoder_fc.input_size, encoder_fc.hidden_size).to('cuda')
-        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.input_size, *architecture).to('cuda')
-        self.lstm_3 = nn.LSTMCell(encoder_mg.input_size, encoder_mg.hidden_size).to('cuda')
-        self.lstm_4 = nn.LSTMCell(encoder_mg.input_size, encoder_mg.hidden_size).to('cuda')
-        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.input_size, *architecture).to('cuda')
-        self.fc = DeepNeuralNetwork(self.hidden_size, output_size, *architecture).to('cuda')
+        self.attention_1 = nn.MultiheadAttention(encoder_fc.hidden_size, num_heads[0], batch_first=True)
+        self.attention_2 = nn.MultiheadAttention(encoder_mg.hidden_size, num_heads[1], batch_first=True)
         #layer norm with residual connections(AttentionIsAllYouNeed uses several times on arch)
-        self.layer_norm_1 = nn.LayerNorm(encoder_fc.input_size).to('cuda')
-        self.layer_norm_2 = nn.LayerNorm(encoder_mg.input_size).to('cuda')
+        self.layer_norm_1 = nn.LayerNorm(encoder_fc.hidden_size)
+        self.layer_norm_2 = nn.LayerNorm(encoder_mg.hidden_size)
+        #Decoder arch
+        self.fc = DeepNeuralNetwork(self.input_size, output_size, *architecture)
     def forward(self, fc, mg):
-        hn_list = []
-        #get dim
-        _, seq_length, _ = fc.size()
         #encoder for faraday cup
-        out, (hn,cn) = self.encoder_fc(fc)
+        out_fc, (hn_fc,cn_fc) = self.encoder_fc(fc)
         #Attention mechanism
-        attn_out, _ = self.attention_1(out,out,out)
+        attn_fc, _ = self.attention_1(out_fc,out_fc,out_fc)
         #Layer norm and residual
-        attn_out = self.layer_norm_1(attn_out+fc)
-        #Decoder
-        out_list = []
-        for t in range(seq_length):
-            xt = attn_out[:,t,:]
-            hn,cn = self.lstm_1(xt, (hn,cn))
-            out = self.linear_1(hn)
-            out_list.append(out)
-        #Getting the output sequences from lstm processing
-        out = torch.stack(out_list, dim = 1) #seq dim
-        #last layer norm with residual connection
-        out = self.layer_norm_1(out+attn_out)
-        #second step decoder
-        for t in range(seq_length):
-            xt = out[:,t,:]
-            hn,cn = self.lstm_2(xt, (hn,cn))
-        #add to last hn 
-        hn_list.append(hn)
+        out_fc = self.layer_norm_1(attn_fc+out_fc)
         #encoder for magnetometer
-        out, (hn,cn) = self.encoder_mg(mg)
+        out_mg, (hn_mg,cn_mg) = self.encoder_mg(mg)
         #Attention mechanism
-        attn_out, _ = self.attention_2(out,out,out)
+        attn_mg, _ = self.attention_2(out_mg,out_mg,out_mg)
         #Layer norm and residual
-        attn_out = self.layer_norm_2(attn_out+mg)
-        #Decoder
-        out_list = []
-        for t in range(seq_length):
-            xt = attn_out[:,t,:]
-            hn,cn = self.lstm_3(xt, (hn,cn))
-            out = self.linear_2(hn)
-            out_list.append(out)
-        #Getting the output sequences from lstm processing
-        out = torch.stack(out_list, dim = 1) #seq dim
-        #last layer norm with residual connection
-        out = self.layer_norm_2(out+attn_out)
-        #second step decoder
-        for t in range(seq_length):
-            xt = out[:,t,:]
-            hn,cn = self.lstm_4(xt, (hn,cn))
-        hn_list.append(hn)
-        
-        hn = torch.cat(hn_list, dim = 1)
-        #inference with Deep Neural Network
-
-        out = self.fc(hn)
+        out_mg = self.layer_norm_2(attn_mg+out_mg)
+        hn = torch.cat([hn_fc, hn_mg], dim = -1)
+        cn = torch.cat([cn_fc, cn_mg], dim = -1)
+        out = torch.cat([out_fc, out_mg], dim = -1)
+        out, (_,_) = self.decoder(out, hn, cn)
+        out = self.fc(out[:,-1,:])
         return out
-#GRUs with multihead attention incorporated
+
+
 class EncoderMultiheadAttentionGRU(nn.Module):
-    def __init__(self, input_size, hidden_size, num_heads, architecture):
+    def __init__(self, input_size, hidden_size, num_heads, num_layers = 1, dropout = 0, bidirectional = True):
         super(EncoderMultiheadAttentionGRU, self).__init__()
-        self.hidden_size=hidden_size
         self.input_size = input_size
+        self.hidden_size= hidden_size
         #attention
-        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first = True).to('cuda')
-        self.layer_norm = nn.LayerNorm(input_size).to('cuda')
+        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
+        self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
-        self.gru = nn.GRUCell(input_size,hidden_size).to('cuda')
-        self.fc = DeepNeuralNetwork(hidden_size,input_size, *architecture).to('cuda')
+        self.gru = nn.GRU(input_size = input_size, hidden_size = hidden_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
 
     def forward(self, x):
-        batch_size, seq_length, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
         #Multihead attention
         attn_out, _ = self.attention(x,x,x)
         #residual connection and layer_norm
         attn_out = self.layer_norm(attn_out+x)
+        #LSTM
+        out, hn = self.gru(attn_out)
+        #return outputs
+        return out, hn
+
+class DecoderMultiheadAttentionGRU(nn.Module):
+    def __init__(self, input_size, hidden_size, num_heads, num_layers = 1, dropout = 0, bidirectional = True):
+        super(DecoderMultiheadAttentionGRU, self).__init__()
+        self.input_size = input_size
+        self.hidden_size= hidden_size
+        #attention
+        self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
+        self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
-        out_list = []
-        for t in range(seq_length):
-            xt = attn_out[:,t,:]
-            hn = self.gru(xt, hn)
-            out = self.fc(hn)
-            out_list.append(out)
-        
-        out = torch.stack(out_list, dim = 1)
-        
-        out = self.layer_norm(out+attn_out)
+        self.gru = nn.GRU(input_size = input_size, hidden_size = hidden_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
 
+    def forward(self, x, hn):
+        #LSTM
+        out, hn = self.gru(x, hn)
+        context, _ = self.attention(out, out, out)
+        out = self.layer_norm(context+out)
+        #return outputs
         return out, hn
+    
 class MultiHeaded2MultiheadAttentionGRU(MultiHead2MultiHeadBase):
-    def __init__(self, encoder_fc, encoder_mg,num_heads: list, architecture, output_size):
+    def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, output_size):
         super(MultiHeaded2MultiheadAttentionGRU, self).__init__()
         #hidden
-        self.hidden_size = encoder_fc.hidden_size + encoder_mg.hidden_size
+        self.input_size = encoder_fc.hidden_size + encoder_mg.hidden_size
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
+        self.decoder = decoder
         #MultiheadAttention
-        self.attention_1 = nn.MultiheadAttention(encoder_fc.input_size, num_heads[0], batch_first=True).to('cuda')
-        self.attention_2 = nn.MultiheadAttention(encoder_mg.input_size, num_heads[1], batch_first=True).to('cuda')
-        #Decoder arch
-        self.gru_1 = nn.GRUCell(encoder_fc.input_size, encoder_fc.hidden_size).to('cuda')
-        self.gru_2 = nn.GRUCell(encoder_fc.input_size, encoder_fc.hidden_size).to('cuda')
-        self.linear_1 = DeepNeuralNetwork(encoder_fc.hidden_size, encoder_fc.input_size, *architecture).to('cuda')
-        self.gru_3 = nn.GRUCell(encoder_mg.input_size, encoder_mg.hidden_size).to('cuda')
-        self.gru_4 = nn.GRUCell(encoder_mg.input_size, encoder_mg.hidden_size).to('cuda')
-        self.linear_2 = DeepNeuralNetwork(encoder_mg.hidden_size, encoder_mg.input_size, *architecture).to('cuda')
-        self.fc = DeepNeuralNetwork(self.hidden_size, output_size, *architecture).to('cuda')
+        self.attention_1 = nn.MultiheadAttention(encoder_fc.hidden_size, num_heads[0], batch_first=True)
+        self.attention_2 = nn.MultiheadAttention(encoder_mg.hidden_size, num_heads[1], batch_first=True)
         #layer norm with residual connections(AttentionIsAllYouNeed uses several times on arch)
-        self.layer_norm_1 = nn.LayerNorm(encoder_fc.input_size).to('cuda')
-        self.layer_norm_2 = nn.LayerNorm(encoder_mg.input_size).to('cuda')
+        self.layer_norm_1 = nn.LayerNorm(encoder_fc.hidden_size)
+        self.layer_norm_2 = nn.LayerNorm(encoder_mg.hidden_size)
+        #Decoder arch
+        self.fc = DeepNeuralNetwork(self.input_size, output_size, *architecture)
     def forward(self, fc, mg):
-        hn_list = []
-        #get dim
-        _, seq_length, _ = fc.size()
         #encoder for faraday cup
-        out, hn = self.encoder_fc(fc)
+        out_fc, hn_fc = self.encoder_fc(fc)
         #Attention mechanism
-        attn_out, _ = self.attention_1(out,out,out)
+        attn_fc, _ = self.attention_1(out_fc,out_fc,out_fc)
         #Layer norm and residual
-        attn_out = self.layer_norm_1(attn_out+fc)
-        #Decoder
-        out_list = []
-        for t in range(seq_length):
-            xt = attn_out[:,t,:]
-            hn = self.gru_1(xt, hn)
-            out = self.linear_1(hn)
-            out_list.append(out)
-        #Getting the output sequences from lstm processing
-        out = torch.stack(out_list, dim = 1) #seq dim
-        #last layer norm with residual connection
-        out = self.layer_norm_1(out+attn_out)
-        #second step decoder
-        for t in range(seq_length):
-            xt = out[:,t,:]
-            hn = self.gru_2(xt, hn)
-        #add to last hn 
-        hn_list.append(hn)
+        out_fc = self.layer_norm_1(attn_fc+out_fc)
         #encoder for magnetometer
-        out, hn = self.encoder_mg(mg)
+        out_mg, hn_mg = self.encoder_mg(mg)
         #Attention mechanism
-        attn_out, _ = self.attention_2(out,out,out)
+        attn_mg, _ = self.attention_2(out_mg,out_mg,out_mg)
         #Layer norm and residual
-        attn_out = self.layer_norm_2(attn_out+mg)
-        #Decoder
-        out_list = []
-        for t in range(seq_length):
-            xt = attn_out[:,t,:]
-            hn = self.gru_3(xt, hn)
-            out = self.linear_2(hn)
-            out_list.append(out)
-        #Getting the output sequences from lstm processing
-        out = torch.stack(out_list, dim = 1) #seq dim
-        #last layer norm with residual connection
-        out = self.layer_norm_2(out+attn_out)
-        #second step decoder
-        for t in range(seq_length):
-            xt = out[:,t,:]
-            hn = self.gru_4(xt, hn)
-        hn_list.append(hn)
-        
-        hn = torch.cat(hn_list, dim = 1)
-        #inference with Deep Neural Network
-
-        out = self.fc(hn)
+        out_mg = self.layer_norm_2(attn_mg+out_mg)
+        hn = torch.cat([hn_fc, hn_mg], dim = -1)
+        out = torch.cat([out_fc, out_mg], dim = -1)
+        out, _ = self.decoder(out, hn)
+        out = self.fc(out[:,-1,:])
         return out

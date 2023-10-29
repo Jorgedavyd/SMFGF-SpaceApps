@@ -48,7 +48,8 @@ def map_kp_index_to_interval(kp_index):
 
 #We need the pred_length to be of size divisible by 3 if possible
 class RefinedTrainingDataset(Dataset):
-    def __init__(self, l1_df, l2_df, dst_series, kp_series, sequence_length, prediction_length, hour = False):
+    def __init__(self, l1_df, l2_df, dst_series, kp_series, sequence_length, prediction_length, hour = False, time_step_ahead = 0):
+        self.time_ahead = time_step_ahead
         #other parameters
         self.sequence_length = sequence_length
         self.mode = hour
@@ -69,19 +70,19 @@ class RefinedTrainingDataset(Dataset):
 
     def __len__(self):
         if self.mode:
-            return self.raw.shape[0] - (self.sequence_length + self.pred_length) + 1
+            return self.raw.shape[0] - (self.sequence_length + self.pred_length+ self.time_ahead) + 1
         else:
-            return self.raw.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+            return self.raw.shape[0] - (self.sequence_length + 60*self.pred_length+ self.time_ahead) + 1
             
     def __getitem__(self, idx):
         l1_sample = self.raw[idx:idx+self.sequence_length, :]
         l2_sample = self.pro[idx:idx+self.sequence_length, :]
         if self.mode:
-            dst = self.dst[idx+self.sequence_length:idx+self.sequence_length+self.pred_length]
-            kp = self.kp[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)]
+            dst = self.dst[idx+self.sequence_length+ self.time_ahead:idx+self.sequence_length+self.pred_length+ self.time_ahead]
+            kp = self.kp[hour_to_3_hour(idx+self.sequence_length)+ self.time_ahead:hour_to_3_hour(idx+self.sequence_length)+ self.time_ahead + hour_to_3_hour(self.pred_length)]
         else:
-            dst = self.dst[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
-            kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(self.pred_length)]
+            dst = self.dst[min_to_hour(idx+self.sequence_length)+ self.time_ahead:min_to_hour(idx+self.sequence_length)+ self.time_ahead+self.pred_length]
+            kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead:hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead+hour_to_3_hour(self.pred_length)]
         l1_sample = torch.tensor(l1_sample, dtype=torch.float32)
         l2_sample = torch.tensor(l2_sample, dtype=torch.float32)
         dst = torch.tensor(dst, dtype=torch.float32).squeeze(1)
@@ -89,7 +90,8 @@ class RefinedTrainingDataset(Dataset):
         return l1_sample, l2_sample, dst, kp
 
 class NormalTrainingDataset(Dataset):
-    def __init__(self, l1_df, dst_series, kp_series, sequence_length, prediction_length, hour = False):
+    def __init__(self, l1_df, dst_series, kp_series, sequence_length, prediction_length, hour = False, time_step_ahead = 0):
+        self.time_ahead = time_step_ahead
         #normalize features
         self.x_scaler = StandardScaler()
         self.features = self.x_scaler.fit_transform(l1_df.values)
@@ -106,133 +108,46 @@ class NormalTrainingDataset(Dataset):
         self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
     def __len__(self):
         if self.mode:
-            return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
+            return self.features.shape[0] - (self.sequence_length + self.pred_length+ self.time_ahead) + 1
         else:
-            return self.features.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+            return self.features.shape[0] - (self.sequence_length + 60*self.pred_length+ self.time_ahead) + 1
     def __getitem__(self, idx):
         feature = self.features[idx:idx+self.sequence_length, :]
         if self.mode:
-            dst = self.dst[idx+self.sequence_length:idx+self.sequence_length+self.pred_length]
-            kp = self.kp[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)]
+            dst = self.dst[idx+self.sequence_length+ self.time_ahead:idx+self.sequence_length+self.pred_length+ self.time_ahead]
+            kp = self.kp[hour_to_3_hour(idx+self.sequence_length)+ self.time_ahead:hour_to_3_hour(idx+self.sequence_length)+ self.time_ahead + hour_to_3_hour(self.pred_length)]
         else:
-            dst = self.dst[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
-            kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(self.pred_length)]
+            dst = self.dst[min_to_hour(idx+self.sequence_length)+ self.time_ahead:min_to_hour(idx+self.sequence_length)+ self.time_ahead+self.pred_length]
+            kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead:hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead+hour_to_3_hour(self.pred_length)]
         feature = torch.tensor(feature, dtype=torch.float32)
         dst = torch.tensor(dst, dtype=torch.float32).squeeze(1)
         kp = torch.tensor(kp, dtype=torch.float32).squeeze(1)
         return feature, dst, kp
-    
 
-class KpData(Dataset):
-    def __init__(self, l1_df, kp_series, sequence_length, prediction_length, hour = False, sep = False):
-        #normalize features
-        self.sep = sep
-        if sep:
-            self.fc, self.mg = l1_df
-            self.fc_scaler = StandardScaler()
-            self.fc = self.fc_scaler.fit_transform(self.fc.values)
-            self.mg_scaler = StandardScaler()
-            self.mg = self.mg_scaler.fit_transform(self.mg.values)
-        else:
-            self.x_scaler = StandardScaler()
-            self.features = self.x_scaler.fit_transform(l1_df.values)
-        #Kp scaler
-        self.kp_scaler = StandardScaler() #
-        self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
-        self.kp = self.kp_scaler.fit_transform(self.kp)
-        #other parameters
-        self.sequence_length = sequence_length
-        self.mode = hour
-        self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
-    def __len__(self):
-        if self.sep:
-            if self.mode:
-                return self.fc.shape[0] - (self.sequence_length + self.pred_length) + 1
-            else:
-                return self.fc.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
-        else:
-            if self.mode:
-                return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
-            else:
-                return self.features.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
-    def __getitem__(self, idx):
-        if self.mode:
-            kp = self.kp[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)]
-        else:
-            kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(self.pred_length)]
-        kp = torch.tensor(kp, dtype=torch.float32).squeeze(1)
-        if self.sep:
-            fc = self.fc[idx:idx+self.sequence_length, :]
-            mg = self.mg[idx:idx+self.sequence_length, :]
-            fc = torch.tensor(fc, dtype=torch.float32)
-            mg = torch.tensor(mg, dtype=torch.float32)
-            return fc, mg, kp
-        else:
-            feature = self.features[idx:idx+self.sequence_length, :]
-            feature = torch.tensor(feature, dtype=torch.float32)
-            return feature, kp
-    
-class DstData(Dataset):
-    def __init__(self, l1_df, dst_series, sequence_length, prediction_length, hour = False, sep = False):
-        self.sep = sep
-        if sep:
-            self.fc, self.mg = l1_df
-            self.fc_scaler = StandardScaler()
-            self.fc = self.fc_scaler.fit_transform(self.fc.values)
-            self.mg_scaler = StandardScaler()
-            self.mg = self.mg_scaler.fit_transform(self.mg.values)
-        else:
-            self.x_scaler = StandardScaler()
-            self.features = self.x_scaler.fit_transform(l1_df.values)
-        #dst scaler
-        self.dst_scaler = StandardScaler() #
-        self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
-        #other parameters
-        self.sequence_length = sequence_length
-        self.mode = hour
-        self.pred_length = prediction_length #this will define how many hours later we want to train our model on 
-        self.sep = sep
-    def __len__(self):
-        if self.sep:
-            if self.mode:
-                return self.fc.shape[0] - (self.sequence_length + self.pred_length) + 1
-            else:
-                return self.fc.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
-        else:
-            if self.mode:
-                return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
-            else:
-                return self.features.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
-    def __getitem__(self, idx):
-        if self.mode:
-            dst = self.dst[idx+self.sequence_length:idx+self.sequence_length+self.pred_length]
-        else:
-            dst = self.dst[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
-        dst = torch.tensor(dst, dtype=torch.float32).squeeze(1)
-        if self.sep:
-            fc = self.fc[idx:idx+self.sequence_length, :]
-            mg = self.mg[idx:idx+self.sequence_length, :]
-            fc = torch.tensor(fc, dtype=torch.float32)
-            mg = torch.tensor(mg, dtype=torch.float32)
-            return fc, mg, dst
-        else:
-            feature = self.features[idx:idx+self.sequence_length, :]
-            feature = torch.tensor(feature, dtype=torch.float32)
-            return feature, dst
-    
 dict_values = ['dst_kyoto', 'kp_gfz']
 class MainToSingleTarget(Dataset):
-    def __init__(self, l1_df, target, sequence_length, prediction_length, hour = False, sep = False, target_mode:str = 'dst_kyoto'):
+    def __init__(self, l1_df, target, sequence_length, prediction_length, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0):
         self.sep = sep
+        self.time_ahead = time_step_ahead
+        if l2_df is not None:
+            self.encoder_forcing = True
+        else:
+            self.encoder_forcing = False
         if sep:
             self.fc, self.mg = l1_df
             self.fc_scaler = StandardScaler()
             self.fc = self.fc_scaler.fit_transform(self.fc.values)
             self.mg_scaler = StandardScaler()
             self.mg = self.mg_scaler.fit_transform(self.mg.values)
+            if self.encoder_forcing:
+                self.f1m, self.m1m = l2_df
+                self.f1m = self.fc_scaler.transform(self.f1m.values)
+                self.m1m = self.mg_scaler.transform(self.m1m.values)
         else:
             self.x_scaler = StandardScaler()
-            self.features = self.x_scaler.fit_transform(l1_df.values)
+            self.l1_data = self.x_scaler.fit_transform(l1_df.values)
+            if self.encoder_forcing:
+                self.l2_data = self.x_scaler.transform(l2_df.values)
         #dst scaler
         self.y_scaler = StandardScaler() #
         if target_mode == 'kp_gfz':
@@ -247,36 +162,46 @@ class MainToSingleTarget(Dataset):
     def __len__(self):
         if self.sep:
             if self.mode:
-                return self.fc.shape[0] - (self.sequence_length + self.pred_length) + 1
+                return self.fc.shape[0] - (self.sequence_length + self.pred_length + self.time_ahead) + 1
             else:
-                return self.fc.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+                return self.fc.shape[0] - (self.sequence_length + 60*self.pred_length + self.time_ahead) + 1
         else:
             if self.mode:
-                return self.features.shape[0] - (self.sequence_length + self.pred_length) + 1
+                return self.l1_data.shape[0] - (self.sequence_length + self.pred_length + self.time_ahead) + 1
             else:
-                return self.features.shape[0] - (self.sequence_length + 60*self.pred_length) + 1
+                return self.l1_data.shape[0] - (self.sequence_length + 60*self.pred_length + self.time_ahead) + 1
     def __getitem__(self, idx):
         if self.mode:
             if self.target_mode == 'kp_gfz':
-                target = self.target[hour_to_3_hour(idx+self.sequence_length):hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)]
+                target = self.target[hour_to_3_hour(idx+self.sequence_length)+ self.time_ahead:hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)+ self.time_ahead]
             elif self.target_mode == 'dst_kyoto':
-                target = self.target[idx+self.sequence_length:idx+self.sequence_length+self.pred_length]
+                target = self.target[idx+self.sequence_length+ self.time_ahead:idx+self.sequence_length+self.pred_length+ self.time_ahead]
         else:
             if self.target_mode == 'kp_gfz':
-                target = self.target[hour_to_3_hour(min_to_hour(idx+self.sequence_length)):hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(self.pred_length)]
+                target = self.target[hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead:hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(self.pred_length)+ self.time_ahead]
             elif self.target_mode == 'dst_kyoto':
-                target = self.target[min_to_hour(idx+self.sequence_length):min_to_hour(idx+self.sequence_length)+self.pred_length]
+                target = self.target[min_to_hour(idx+self.sequence_length)+ self.time_ahead:min_to_hour(idx+self.sequence_length)+self.pred_length+ self.time_ahead]
         target = torch.tensor(target, dtype=torch.float32).squeeze(1)
         if self.sep:
             fc = self.fc[idx:idx+self.sequence_length, :]
             mg = self.mg[idx:idx+self.sequence_length, :]
             fc = torch.tensor(fc, dtype=torch.float32)
             mg = torch.tensor(mg, dtype=torch.float32)
+            if self.encoder_forcing:
+                f1m = self.f1m[idx:idx+self.sequence_length, :]
+                m1m = self.m1m[idx:idx+self.sequence_length, :]
+                f1m = torch.tensor(f1m, dtype=torch.float32)
+                m1m = torch.tensor(m1m, dtype=torch.float32)
+                return fc, mg, f1m, m1m, target
             return fc, mg, target
         else:
-            feature = self.features[idx:idx+self.sequence_length, :]
-            feature = torch.tensor(feature, dtype=torch.float32)
-            return feature, target
+            l1_data = self.l1_data[idx:idx+self.sequence_length, :]
+            l1_data = torch.tensor(l1_data, dtype=torch.float32)
+            if self.encoder_forcing:
+                l2_data = self.l2_data[idx: idx+self.sequence_length, :]
+                l2_data = torch.tensor(l2_data, dtype = torch.float32)
+                return l1_data, l2_data, target
+            return l1_data, target
     
 
 

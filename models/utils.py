@@ -6,7 +6,7 @@ def  SingularLayer(input_size, output):
     out = nn.Sequential(
         nn.Linear(input_size, output),
         nn.ReLU(True)
-    ).to('cuda')
+    )
     return out
 
 class DeepNeuralNetwork(nn.Module):
@@ -20,7 +20,7 @@ class DeepNeuralNetwork(nn.Module):
             input_size = output
 
         #Model output layer
-        self.output_layer = nn.Sequential(nn.Linear(input_size, output_size)).to('cuda')
+        self.output_layer = nn.Sequential(nn.Linear(input_size, output_size))
         if activation is not None:
             self.output_layer.add_module(activation)
     def forward(self, xb):
@@ -31,15 +31,12 @@ class DeepNeuralNetwork(nn.Module):
 # Attention based RNNs
 class Attention(nn.Module):
     def __init__(self, hidden_size):
-        super(Attention, self).__init__()
+        super(Attention, self).__init()
         self.hidden_size = hidden_size
-        self.attention_layer = nn.Linear(hidden_size, hidden_size).to('cuda')
-        
-    def forward(self, hidden_states):
-        attention_weights = self.attention_layer(hidden_states)
-        attention_weights = torch.tanh(attention_weights)
-        attention_weights = torch.softmax(attention_weights, dim=0)
-        
-        context_vector = torch.sum(attention_weights * hidden_states, dim=0)
-        
-        return context_vector
+        self.attn = nn.Linear(hidden_size, hidden_size)
+    
+    def forward(self, encoder_outputs):
+        energy = self.attn(encoder_outputs)
+        attention_weights = torch.softmax(energy, dim=1)
+        context = attention_weights * encoder_outputs
+        return context

@@ -22,7 +22,6 @@ class Simple1DCNN(nn.Module):
         x = self.relu(x)
         x = self.maxpool(x)
         x = x.view(x.size(0), -1)  # Flatten
-        x = self.fc(x)
         return x
 
 
@@ -139,89 +138,9 @@ class DeepGRU(nn.Module):
         else:
             return hn
     
-
-class LSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, attention = True):
-        super(LSTM, self).__init__()
-        self.hidden_size = hidden_size
-        self.lstm = nn.LSTMCell(input_size, hidden_size).to('cuda')
-        self.attention = Attention(self.hidden_size).to('cuda')
-        self.at = attention
-    def forward(self, x):
-        batch_size, sequence_size, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
-        cn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
-        hn_list = []
-        for t in range(sequence_size):
-            
-            xt = x[:, t, :]
-
-            hn,cn = self.lstm(xt, (hn,cn))
-            hn_list.append(hn)
-        if self.at:
-            hidden_states = torch.stack(hn_list)
-            context_vector = self.attention(hidden_states)
-        
-            return context_vector
-        else:
-            return hn
-class GRU(nn.Module):
-    def __init__(self, input_size, hidden_size, attention):
-        super(GRU, self).__init__()
-        self.hidden_size = hidden_size
-        self.gru = nn.GRUCell(input_size, hidden_size).to('cuda')
-        self.attention = Attention(self.hidden_size).to('cuda')
-        self.at = attention
-    def forward(self, x):
-        batch_size, sequence_size, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
-        hn_list = []
-        for t in range(sequence_size):
-            
-            xt = x[:, t, :]
-
-            hn = self.gru(xt, hn) 
-
-            hn_list.append(hn)
-        if self.at:
-            hidden_states = torch.stack(hn_list)
-            context_vector = self.attention(hidden_states)
-        
-            return context_vector
-        else:
-            return hn
-    
-class VanillaRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, attention = True):
-        super(VanillaRNN, self).__init__()
-        self.hidden_size = hidden_size
-        self.rnn = nn.RNNCell(input_size, hidden_size).to('cuda')
-        self.attention = Attention(self.hidden_size).to('cuda')
-        self.at = attention
-    
-    def forward(self, x):
-        batch_size, sequence_size, _ = x.size()
-        hn = torch.zeros(batch_size, self.hidden_size, requires_grad = True).to('cuda')
-        hn_list = []
-        for t in range(sequence_size):
-            
-            xt = x[:, t, :]
-
-            hn = self.rnn(xt, hn)
-
-            hn_list.append(hn)
-
-        if self.at:
-            hidden_states = torch.stack(hn_list)
-            context_vector = self.attention(hidden_states)
-        
-            return context_vector
-        else:
-            return hn
-    
-class BidirectionalRNN(nn.Module):
+class DeepBidirectionalRNN(nn.Module):
     def __init__(self, rnn1, rnn2):
-        super(BidirectionalRNN, self).__init__()
+        super(DeepBidirectionalRNN, self).__init__()
         self.rnn1 = rnn1
         self.rnn2 = rnn2
         
@@ -238,3 +157,57 @@ class BidirectionalRNN(nn.Module):
         hidden_bidirectional = torch.cat((hidden1,hidden2), dim = 1)
         
         return hidden_bidirectional
+
+class LSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, dropout = 0, bidirectional = True, attention = True):
+        super(LSTM, self).__init__()
+        self.hidden_size = hidden_size
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
+        self.att = False
+        if attention:
+            self.attention = Attention(self.hidden_size)
+            self.att = True
+    def forward(self, x, hn = None, cn = None):
+        batch_size,_,_ = x.size()
+        if hn is None:
+            hn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+        if cn is None:
+            cn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+        if self.att:
+            x = self.attention(x)
+        out, (hn,cn) = self.lstm(x, (hn,cn))
+        return out, (hn,cn)
+class GRU(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, dropout = 0, bidirectional = True, attention = True):
+        super(GRU, self).__init__()
+        self.hidden_size = hidden_size
+        self.gru = nn.GRU(input_size, hidden_size, num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
+        self.att = False
+        if attention:
+            self.attention = Attention(self.hidden_size)
+            self.att = True
+    def forward(self, x, hn = None):
+        batch_size,_,_ = x.size()
+        if hn is None:
+            hn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+        if self.att:
+            x = self.attention(x)
+        out, hn = self.gru(x, hn)
+        return out, hn
+class RNN(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, dropout = 0, bidirectional = True, attention = True):
+        super(RNN, self).__init__()
+        self.hidden_size = hidden_size
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
+        self.att = False
+        if attention:
+            self.attention = Attention(self.hidden_size)
+            self.att = True
+    def forward(self, x, hn = None):
+        batch_size,_,_ = x.size()
+        if hn is None:
+            hn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+        if self.att:
+            x = self.attention(x)
+        out, hn = self.rnn(x, hn)
+        return out, hn
