@@ -31,7 +31,7 @@ class DeepNeuralNetwork(nn.Module):
 # Attention based RNNs
 class Attention(nn.Module):
     def __init__(self, hidden_size):
-        super(Attention, self).__init()
+        super(Attention, self).__init__()
         self.hidden_size = hidden_size
         self.attn = nn.Linear(hidden_size, hidden_size)
     

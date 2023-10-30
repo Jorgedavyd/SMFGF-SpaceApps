@@ -162,17 +162,18 @@ class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, dropout = 0, bidirectional = True, attention = True):
         super(LSTM, self).__init__()
         self.hidden_size = hidden_size
+        self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
         self.att = False
         if attention:
-            self.attention = Attention(self.hidden_size)
+            self.attention = Attention(input_size)
             self.att = True
     def forward(self, x, hn = None, cn = None):
         batch_size,_,_ = x.size()
         if hn is None:
-            hn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+            hn = torch.zeros(self.num_layers * (2 if self.lstm.bidirectional else 1), batch_size, self.hidden_size, requires_grad=True, device= 'cuda')
         if cn is None:
-            cn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+            cn = torch.zeros(self.num_layers * (2 if self.lstm.bidirectional else 1), batch_size, self.hidden_size, requires_grad=True, device = 'cuda')
         if self.att:
             x = self.attention(x)
         out, (hn,cn) = self.lstm(x, (hn,cn))
@@ -181,15 +182,16 @@ class GRU(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, dropout = 0, bidirectional = True, attention = True):
         super(GRU, self).__init__()
         self.hidden_size = hidden_size
+        self.num_layers = num_layers
         self.gru = nn.GRU(input_size, hidden_size, num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
         self.att = False
         if attention:
-            self.attention = Attention(self.hidden_size)
+            self.attention = Attention(input_size)
             self.att = True
     def forward(self, x, hn = None):
         batch_size,_,_ = x.size()
         if hn is None:
-            hn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+            hn = torch.zeros(self.num_layers * (2 if self.gru.bidirectional else 1), batch_size, self.hidden_size, requires_grad=True)
         if self.att:
             x = self.attention(x)
         out, hn = self.gru(x, hn)
@@ -201,12 +203,12 @@ class RNN(nn.Module):
         self.rnn = nn.RNN(input_size, hidden_size, num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
         self.att = False
         if attention:
-            self.attention = Attention(self.hidden_size)
+            self.attention = Attention(input_size)
             self.att = True
     def forward(self, x, hn = None):
         batch_size,_,_ = x.size()
         if hn is None:
-            hn = torch.zeros(batch_size, self.hidden_size, requires_grad=True)
+            hn = torch.zeros(self.rnn.num_layers * (2 if self.rnn.bidirectional else 1), batch_size, self.hidden_size, requires_grad=True)
         if self.att:
             x = self.attention(x)
         out, hn = self.rnn(x, hn)

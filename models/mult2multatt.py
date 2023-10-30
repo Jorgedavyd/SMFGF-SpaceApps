@@ -3,58 +3,6 @@ from models.df_models import *
 import torch.nn.functional as F
 from sklearn.metrics import r2_score
 from models.base import *
-def r2(y_pred, y_true):
-    # Calculate the mean of the true values
-    mean = torch.mean(y_true)
-
-    # Calculate the total sum of squares
-    ss_total = torch.sum((y_true - mean) ** 2)
-
-    # Calculate the residual sum of squares
-    ss_residual = torch.sum((y_true - y_pred) ** 2)
-
-    # Calculate R2 score
-    r2 = 1 - (ss_residual / ss_total)
-    
-    return r2
-
-def threshold_predictions(predictions, threshold=-2.6):
-    # Convert regression predictions to binary (0 or 1) based on the threshold
-    binary_predictions = (predictions <= threshold).float()
-    return binary_predictions
-
-def acc(predictions, targets, threshold=-2.6):
-    binary_predictions = threshold_predictions(predictions, threshold)
-    correct = (binary_predictions == targets).sum().item()
-    total = targets.size(0)
-    accuracy = correct / total
-    return accuracy
-
-def compute_precision(predictions, targets, threshold=-2.6):
-    binary_predictions = threshold_predictions(predictions, threshold)
-    binary_targets = threshold_predictions(targets, threshold)
-    true_positives = ((binary_predictions == 1) & (binary_targets == 1)).sum()
-    false_positives = ((binary_predictions == 1) & (binary_targets == 0)).sum()
-    try:
-        precision = true_positives / (true_positives + false_positives)
-    except ZeroDivisionError:   
-        precision = torch.tensor([0])
-    return precision
-
-def compute_recall(predictions, targets, threshold=-2.6):
-    binary_predictions = threshold_predictions(predictions, threshold)
-    binary_targets = threshold_predictions(targets, threshold)
-    true_positives = ((binary_predictions == 1) & (binary_targets == 1)).sum()
-    false_negatives = ((binary_predictions == 0) & (binary_targets == 1)).sum()
-    recall = true_positives / (true_positives + false_negatives)
-    return recall
-
-def compute_all(predictions, targets, threshold=-2.6):
-    precision = compute_precision(predictions, targets, threshold)
-    recall = compute_recall(predictions, targets, threshold)
-    f1_score = 2 * (precision * recall) / (precision + recall)
-    return precision, recall, f1_score
-
 class MultiHead2MultiHeadBase(GeoBase):
     def training_step(self, batch, weights:list, encoder_forcing):
         self.encoder_forcing = encoder_forcing
@@ -146,13 +94,13 @@ class EncoderMultiheadAttentionLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_heads, num_layers = 1, dropout = 0, bidirectional = True):
         super(EncoderMultiheadAttentionLSTM, self).__init__()
         self.input_size = input_size
-        self.hidden_size= hidden_size
         #attention
         self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
         self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
         self.lstm = nn.LSTM(input_size = input_size, hidden_size = hidden_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
+        self.hidden_size= hidden_size if self.lstm.bidirectional == False else hidden_size*2
 
     def forward(self, x):
         #Multihead attention
@@ -168,13 +116,13 @@ class DecoderMultiheadAttentionLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_heads, num_layers = 1, dropout = 0, bidirectional = True):
         super(DecoderMultiheadAttentionLSTM, self).__init__()
         self.input_size = input_size
-        self.hidden_size= hidden_size
         #attention
         self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
         self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
         self.lstm = nn.LSTM(input_size = input_size, hidden_size = hidden_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
+        self.hidden_size= hidden_size if self.lstm.bidirectional == False else hidden_size*2
 
     def forward(self, x, hn ,cn):
         #LSTM
@@ -188,7 +136,6 @@ class DecoderMultiheadAttentionLSTM(nn.Module):
 class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
     def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, output_size):
         super(MultiHeaded2MultiheadAttentionLSTM, self).__init__()
-        #hidden
         self.input_size = encoder_fc.hidden_size + encoder_mg.hidden_size
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder_fc = encoder_fc
@@ -227,13 +174,13 @@ class EncoderMultiheadAttentionGRU(nn.Module):
     def __init__(self, input_size, hidden_size, num_heads, num_layers = 1, dropout = 0, bidirectional = True):
         super(EncoderMultiheadAttentionGRU, self).__init__()
         self.input_size = input_size
-        self.hidden_size= hidden_size
         #attention
         self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
         self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
         self.gru = nn.GRU(input_size = input_size, hidden_size = hidden_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
+        self.hidden_size= hidden_size if self.gru.bidirectional == False else hidden_size*2
 
     def forward(self, x):
         #Multihead attention
@@ -249,14 +196,13 @@ class DecoderMultiheadAttentionGRU(nn.Module):
     def __init__(self, input_size, hidden_size, num_heads, num_layers = 1, dropout = 0, bidirectional = True):
         super(DecoderMultiheadAttentionGRU, self).__init__()
         self.input_size = input_size
-        self.hidden_size= hidden_size
         #attention
         self.attention = nn.MultiheadAttention(input_size, num_heads, batch_first=True)
         self.layer_norm = nn.LayerNorm(input_size)
         
         #encoder
         self.gru = nn.GRU(input_size = input_size, hidden_size = hidden_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
-
+        self.hidden_size= hidden_size if self.gru.bidirectional == False else hidden_size*2
     def forward(self, x, hn):
         #LSTM
         out, hn = self.gru(x, hn)

@@ -67,8 +67,8 @@ class Sing2Sing(GeoBase):
             loss = 0
             alpha_encoder, alpha_out, alpha_main = weights
             l1_data, l2_data, target = batch #decompose batc
-            out_L1 = self.encoder(l1_data)
-            out_L2 = self.encoder(l2_data)
+            out_L1, _ = self.encoder(l1_data)
+            out_L2, _ = self.encoder(l2_data)
             loss += F.mse_loss(out_L1, out_L2)*alpha_encoder
             out_L1 = self.fc(out_L1[:, -1, :])
             out_L2 = self.fc(out_L2[:, -1, :])
@@ -85,7 +85,7 @@ class Sing2Sing(GeoBase):
             l1_data,_, target = batch #decompose batch
         else:
             l1_data, target= batch 
-        out = self(l1_data)        
+        out= self(l1_data)        
         #dst index or kp
         loss = F.mse_loss(out, target)
         r2_ = r2(out,target)
