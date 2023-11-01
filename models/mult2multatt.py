@@ -149,7 +149,7 @@ class SingleHead2MultiHead(nn.Module):
         precision, recall, f1_score = compute_all(pred, target)
         return {'val_loss': loss.detach(),'r2': r2_.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score}
 class ResidualMultiheadAttentionLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_heads, num_layers_lstm=1, dropout=0, bidirectional=True, overall_num_layers=1):
+    def __init__(self, input_size, hidden_size, num_heads: list, num_layers_lstm=1, dropout=0, bidirectional=True, overall_num_layers=1):
         super(ResidualMultiheadAttentionLSTM, self).__init__()
         self.input_size = input_size
         self.num_layers = overall_num_layers
@@ -160,7 +160,7 @@ class ResidualMultiheadAttentionLSTM(nn.Module):
         
         for _ in range(self.num_layers):
             # Attention
-            self.attention_layers.append(nn.MultiheadAttention(input_size, num_heads, batch_first=True))
+            self.attention_layers.append(nn.MultiheadAttention(input_size,  num_heads[0] if self.input_size==input_size else num_heads[1], batch_first=True))
             
             # Layer normalization after attention
             self.attention_norm = nn.LayerNorm(input_size)
@@ -215,13 +215,13 @@ class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
         out = self.fc(out[:,-1,:])
         return out
 class Sing2MultiheadAttentionLSTM(SingleHead2MultiHead):
-    def __init__(self, encoder, decoder, num_heads: list, architecture, output_size):
+    def __init__(self, encoder, decoder, num_heads, architecture, output_size):
         super(MultiHeaded2MultiheadAttentionLSTM, self).__init__()
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder = encoder
         self.decoder = decoder
         #MultiheadAttention
-        self.attention = nn.MultiheadAttention(encoder.hidden_size, num_heads[0], batch_first=True)
+        self.attention = nn.MultiheadAttention(encoder.hidden_size, num_heads, batch_first=True)
         #layer norm with residual connections(AttentionIsAllYouNeed uses several times on arch)
         self.layer_norm = nn.LayerNorm(encoder.hidden_size)
         #Decoder arch
@@ -240,7 +240,7 @@ class Sing2MultiheadAttentionLSTM(SingleHead2MultiHead):
 
 
 class ResidualMultiheadAttentionGRU(nn.Module):
-    def __init__(self, input_size, hidden_size, num_heads, num_layers_lstm=1, dropout=0, bidirectional=True, overall_num_layers=1):
+    def __init__(self, input_size, hidden_size, num_heads: list, num_layers_lstm=1, dropout=0, bidirectional=True, overall_num_layers=1):
         super(ResidualMultiheadAttentionGRU, self).__init__()
         self.input_size = input_size
         self.num_layers = overall_num_layers
@@ -251,7 +251,7 @@ class ResidualMultiheadAttentionGRU(nn.Module):
         
         for _ in range(self.num_layers):
             # Attention
-            self.attention_layers.append(nn.MultiheadAttention(input_size, num_heads, batch_first=True))
+            self.attention_layers.append(nn.MultiheadAttention(input_size, num_heads[0] if self.input_size==input_size else num_heads[1], batch_first=True))
             
             # Layer normalization after attention
             self.attention_norm = nn.LayerNorm(input_size)
@@ -313,7 +313,7 @@ class Sing2MultiheadAttentionGRU(SingleHead2MultiHead):
         self.encoder = encoder
         self.decoder = decoder
         #MultiheadAttention
-        self.attention = nn.MultiheadAttention(encoder.hidden_size, num_heads[0], batch_first=True)
+        self.attention = nn.MultiheadAttention(encoder.hidden_size, num_heads, batch_first=True)
         #layer norm with residual connections(AttentionIsAllYouNeed uses several times on arch)
         self.layer_norm = nn.LayerNorm(encoder.hidden_size)
         #Decoder arch

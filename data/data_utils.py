@@ -126,8 +126,9 @@ class NormalTrainingDataset(Dataset):
 
 dict_values = ['dst_kyoto', 'kp_gfz']
 class MainToSingleTarget(Dataset):
-    def __init__(self, l1_df, target, sequence_length, prediction_length, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0):
+    def __init__(self, l1_df, target, sequence_length, prediction_length, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0, dae = False):
         self.sep = sep
+        self.dae = dae
         self.time_ahead = time_step_ahead
         if l2_df is not None:
             self.encoder_forcing = True
@@ -171,6 +172,14 @@ class MainToSingleTarget(Dataset):
             else:
                 return self.l1_data.shape[0] - (self.sequence_length + 60*self.pred_length + self.time_ahead) + 1
     def __getitem__(self, idx):
+        if self.dae:
+            if self.encoder_forcing == False:
+                return 'You have to give l2 dataframe'
+            l1_data = self.l1_data[idx:idx+self.sequence_length, :]
+            l2_data = self.l2_data[idx:idx+self.sequence_length, :]
+            l1_data = torch.tensor(l1_data, dtype = torch.float32)
+            l2_data = torch.tensor(l2_data, dtype = torch.float32)
+            return l1_data, l2_data
         if self.mode:
             if self.target_mode == 'kp_gfz':
                 target = self.target[hour_to_3_hour(idx+self.sequence_length)+ self.time_ahead:hour_to_3_hour(idx+self.sequence_length) + hour_to_3_hour(self.pred_length)+ self.time_ahead]
