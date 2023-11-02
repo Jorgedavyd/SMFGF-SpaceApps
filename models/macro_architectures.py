@@ -8,7 +8,7 @@ class Sing2MultNN(GeoBase):
         self.fc_dst = dst #multiheaded neural network ##regression
         self.fc_kp = kp   #multiclass
     def forward(self, x):
-        out = self.encoder(x)
+        out, _ = self.encoder(x)
         dst_out = self.fc_dst(out)
         kp_out = self.fc_kp(out)
         return dst_out, kp_out
@@ -106,8 +106,8 @@ class Mult2Sing(GeoBase):
         self.encoder_mg = encoder_mg
         self.fc = fc #sum of both hiddens at input_size
     def forward(self, fc, mg):
-        out_1 = self.encoder_fc(fc)
-        out_2 = self.encoder_mg(mg)
+        out_1, _ = self.encoder_fc(fc)
+        out_2, _ = self.encoder_mg(mg)
         hidden = torch.cat((out_1, out_2), dim = 1)
         out = self.fc(hidden)
         return out

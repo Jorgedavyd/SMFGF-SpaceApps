@@ -30,13 +30,13 @@ class DeepNeuralNetwork(nn.Module):
     
 # Attention based RNNs
 class Attention(nn.Module):
-    def __init__(self, hidden_size):
-        super(Attention, self).__init__()
-        self.hidden_size = hidden_size
-        self.attn = nn.Linear(hidden_size, hidden_size)
+    def __init__(self, input_size, num_heads = 1):
+        super(MultiHeadAttention, self).__init__()
+        self.attn = nn.MultiheadAttention(input_size, num_heads, batch_first = True)
+        self.layer_norm = nn.LayerNorm(input_size)
     
-    def forward(self, encoder_outputs):
-        energy = self.attn(encoder_outputs)
-        attention_weights = torch.softmax(energy, dim=1)
-        context = attention_weights * encoder_outputs
+    def forward(self, x):
+        
+        attn, _ = self.attn(x,x,x)
+        context = self.layer_norm(attn)
         return context

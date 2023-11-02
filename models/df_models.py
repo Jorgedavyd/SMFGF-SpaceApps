@@ -22,6 +22,7 @@ class Simple1DCNN(nn.Module):
         x = self.relu(x)
         x = self.maxpool(x)
         x = x.view(x.size(0), -1)  # Flatten
+        x = self.fc(x)
         return x
 
 
