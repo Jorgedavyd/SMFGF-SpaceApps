@@ -3,8 +3,7 @@ import torch
 from models.base import *
 class Sing2MultNN(GeoBase):
     def __init__(self, encoder, dst, kp, task = 'regression'):
-        super(Sing2MultNN, self).__init__()
-        GeoBase.__init__(self, task)
+        super(Sing2MultNN, self).__init__(task)
         self.encoder = encoder
         self.fc_dst = dst #multiheaded neural network ##regression
         self.fc_kp = kp   #multiclass
@@ -59,8 +58,7 @@ class Sing2MultNN(GeoBase):
 
 class Sing2Sing(GeoBase):
     def __init__(self, encoder, fc, task='regression'):
-        super(Sing2Sing, self).__init__()
-        GeoBase.__init__(self, task)
+        super(Sing2Sing, self).__init__(task)
         self.encoder = encoder
         self.fc = fc 
     def forward(self, x):
@@ -103,8 +101,7 @@ class Sing2Sing(GeoBase):
             return {'val_loss': loss.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score, 'accuracy': accuracy}
 class Mult2Sing(GeoBase):
     def __init__(self, encoder_fc, encoder_mg, fc, task = 'regression'):
-        super(Mult2Sing, self).__init__()
-        GeoBase.__init__(self, task)
+        super(Mult2Sing, self).__init__(task)
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
         self.fc = fc #sum of both hiddens at input_size

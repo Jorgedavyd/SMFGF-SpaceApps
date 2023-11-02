@@ -83,13 +83,13 @@ class RefinedTrainingDataset(Dataset):
         self.x_hat_scaler = StandardScaler()
         self.pro = self.x_hat_scaler.fit_transform(l2_df.values)
         if multiclass:
-            self.dst = dst_series.apply(dst_to_gscale).values.reshape(-1,1)
-            self.kp = kp_series.apply(map_kp_index_to_interval).apply(dst_to_gscale).values.reshape(-1,1)
+            self.dst = dst_series.apply(dst_to_gscale).values.reshape(-1,1).astype(np.int32())
+            self.kp = kp_series.apply(map_kp_index_to_interval).apply(dst_to_gscale).values.reshape(-1,1).astype(np.int32())
         else:
             self.dst_scaler = StandardScaler() #
-            self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
+            self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1)).astype(np.float32())
             self.kp_scaler = StandardScaler() #
-            self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
+            self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1).astype(np.float32())
             self.kp = self.kp_scaler.fit_transform(self.kp)
 
     def __len__(self):
@@ -109,8 +109,8 @@ class RefinedTrainingDataset(Dataset):
             kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead:hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead+hour_to_3_hour(self.pred_length)]
         l1_sample = torch.tensor(l1_sample, dtype=torch.float32)
         l2_sample = torch.tensor(l2_sample, dtype=torch.float32)
-        dst = torch.tensor(dst, dtype=torch.float32).squeeze(1)
-        kp = torch.tensor(kp, dtype=torch.float32).squeeze(1)
+        dst = torch.tensor(dst).squeeze(1)
+        kp = torch.tensor(kp).squeeze(1)
         return l1_sample, l2_sample, dst, kp
 
 class NormalTrainingDataset(Dataset):
@@ -120,13 +120,13 @@ class NormalTrainingDataset(Dataset):
         self.x_scaler = StandardScaler()
         self.features = self.x_scaler.fit_transform(l1_df.values)
         if multiclass:
-            self.dst = dst_series.apply(dst_to_gscale).values.reshape(-1,1)
-            self.kp = kp_series.apply(map_kp_index_to_interval).apply(dst_to_gscale).values.reshape(-1,1)
+            self.dst = dst_series.apply(dst_to_gscale).values.reshape(-1,1).astype(np.int32())
+            self.kp = kp_series.apply(map_kp_index_to_interval).apply(dst_to_gscale).values.reshape(-1,1).astype(np.int32())
         else:
             self.dst_scaler = StandardScaler() #
-            self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
+            self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1)).astype(np.float32())
             self.kp_scaler = StandardScaler() #
-            self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
+            self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1).astype(np.float32())
             self.kp = self.kp_scaler.fit_transform(self.kp)
         #other parameters
         self.sequence_length = sequence_length
@@ -146,8 +146,8 @@ class NormalTrainingDataset(Dataset):
             dst = self.dst[min_to_hour(idx+self.sequence_length)+ self.time_ahead:min_to_hour(idx+self.sequence_length)+ self.time_ahead+self.pred_length]
             kp = self.kp[hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead:hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead+hour_to_3_hour(self.pred_length)]
         feature = torch.tensor(feature, dtype=torch.float32)
-        dst = torch.tensor(dst, dtype=torch.float32).squeeze(1)
-        kp = torch.tensor(kp, dtype=torch.float32).squeeze(1)
+        dst = torch.tensor(dst).squeeze(1)
+        kp = torch.tensor(kp).squeeze(1)
         return feature, dst, kp
 
 dict_values = ['dst_kyoto', 'kp_gfz']
@@ -177,15 +177,15 @@ class MainToSingleTarget(Dataset):
                 self.l2_data = self.x_scaler.transform(l2_df.values)
         if multiclass:
             if target_mode == 'kp_gfz':
-                self.target = target.apply(map_kp_index_to_interval).apply(kp_to_gscale).values.reshape(-1,1)
+                self.target = target.apply(map_kp_index_to_interval).apply(kp_to_gscale).values.reshape(-1,1).astype(np.int32())
             elif target_mode == 'dst_kyoto':
-                self.target = target.apply(dst_to_gscale).values.reshape(-1,1)
+                self.target = target.apply(dst_to_gscale).values.reshape(-1,1).astype(np.int32())
         else:
             #target scaler
             self.y_scaler = StandardScaler() #
             if target_mode =='kp_gfz':
                 target = target.apply(map_kp_index_to_interval)
-            self.target = self.y_scaler.fit_transform(target.values.reshape(-1,1))
+            self.target = self.y_scaler.fit_transform(target.values.reshape(-1,1).astype(np.float32()))
         #other parameters
         self.sequence_length = sequence_length
         self.mode = hour
@@ -222,7 +222,7 @@ class MainToSingleTarget(Dataset):
                 target = self.target[hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead:hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(self.pred_length)+ self.time_ahead]
             elif self.target_mode == 'dst_kyoto':
                 target = self.target[min_to_hour(idx+self.sequence_length)+ self.time_ahead:min_to_hour(idx+self.sequence_length)+self.pred_length+ self.time_ahead]
-        target = torch.tensor(target, dtype=torch.float32).squeeze(1)
+        target = torch.tensor(target).squeeze(1)
         if self.sep:
             fc = self.fc[idx:idx+self.sequence_length, :]
             mg = self.mg[idx:idx+self.sequence_length, :]

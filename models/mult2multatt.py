@@ -97,7 +97,7 @@ class MultiHead2MultiHeadBase(GeoBase):
 
 class SingleHead2MultiHead(GeoBase):
     def __init__(self, task = 'regression'):
-        GeoBase.__init__(self, task)
+        super(SingleHead2MultiHead, self).__init__(task)
     def training_step(self, batch, weights:list, encoder_forcing):
         self.encoder_forcing = encoder_forcing
         if encoder_forcing:
@@ -235,7 +235,7 @@ class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
         return out
 class Sing2MultiheadAttentionLSTM(SingleHead2MultiHead):
     def __init__(self, encoder, decoder, num_heads, architecture, task = 'regression'):
-        super(MultiHeaded2MultiheadAttentionLSTM, self).__init__(task)
+        super(Sing2MultiheadAttentionLSTM, self).__init__(task)
         output_size = 1 if task == 'regression' else 5
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder = encoder
@@ -293,8 +293,7 @@ class ResidualMultiheadAttentionGRU(nn.Module):
 
 class MultiHeaded2MultiheadAttentionGRU(MultiHead2MultiHeadBase):
     def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, task = 'regression'):
-        super(MultiHeaded2MultiheadAttentionGRU, self).__init__()
-        MultiHead2MultiHeadBase.__init__(self, task)
+        super(MultiHeaded2MultiheadAttentionGRU, self).__init__(task)
         output_size = 1 if task == 'regression' else 5
         #hidden
         self.input_size = encoder_fc.hidden_size + encoder_mg.hidden_size
@@ -331,8 +330,7 @@ class MultiHeaded2MultiheadAttentionGRU(MultiHead2MultiHeadBase):
 
 class Sing2MultiheadAttentionGRU(SingleHead2MultiHead):
     def __init__(self, encoder, decoder, num_heads: list, architecture, task = 'regression'):
-        super(MultiHeaded2MultiheadAttentionGRU, self).__init__()
-        SingleHead2MultiHead.__init__(self,task)
+        super(Sing2MultiheadAttentionGRU, self).__init__(task)
         output_size = 1 if task == 'regression' else 5
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder = encoder

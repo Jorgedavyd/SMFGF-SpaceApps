@@ -6,7 +6,7 @@ from models.utils import DeepNeuralNetwork
 
 class DAE(GeoBase):
     def __init__(self, task):
-        GeoBase.__init__(self, task)
+        super(DAE, self).__init__(task)
     def training_step(self, batch):
         l1, l2 = batch
         l2_hat = self(l1)
@@ -26,8 +26,7 @@ class DAE(GeoBase):
 
 class LSTMDenoisingAutoEncoder(DAE):
     def __init__(self, input_size, hidden_size, num_layers, dropout = 0, bidirectional = True, num_heads = None, architecture = (20,20,20)):
-        super(LSTMDenoisingAutoEncoder, self).__init__()
-        DAE.__init__(self, 'regression')
+        super(LSTMDenoisingAutoEncoder, self).__init__('regression')
         self.encoder = nn.LSTM(input_size, hidden_size, num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
         self.decoder = nn.LSTM(hidden_size, input_size, num_layers, dropout=dropout, bidirectional=bidirectional, batch_first=True)
         self.attention = True if num_heads is not None else False
@@ -59,8 +58,7 @@ class LSTMDenoisingAutoEncoder(DAE):
 
 class GRUDenoisingAutoEncoder(DAE):
     def __init__(self, input_size, hidden_size, num_layers, dropout = 0, bidirectional = True, num_heads = None, architecture = (20,20,20)):
-        super(GRUDenoisingAutoEncoder, self).__init__()
-        DAE.__init__(self, 'regression')
+        super(GRUDenoisingAutoEncoder, self).__init__('regression')
         self.encoder = nn.GRU(input_size, hidden_size, num_layers, dropout = dropout, bidirectional = bidirectional, batch_first = True)
         self.decoder = nn.GRU(hidden_size, input_size, num_layers, dropout=dropout, bidirectional=bidirectional, batch_first=True)
         self.attention = True if num_heads is not None else False
