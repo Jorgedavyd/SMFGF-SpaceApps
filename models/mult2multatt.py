@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from sklearn.metrics import r2_score
 from models.base import *
 class MultiHead2MultiHeadBase(GeoBase):
+    def __init__(self, task = 'regression'):
+        super(MultiHead2MultiHeadBase, self).__init__(task)
     def training_step(self, batch, weights:list, encoder_forcing):
         self.encoder_forcing = encoder_forcing
         if encoder_forcing:
@@ -40,7 +42,7 @@ class MultiHead2MultiHeadBase(GeoBase):
                 out_L2, (_,_) = self.decoder(out_L2, hn_L2, cn_L2)
                 out_L2 = self.fc(out_L2[:,-1,:])
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
-                loss += F.mse_loss(out_L1, target)*alpha_main
+                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type=='regression' else F.cross_entropy(out_L1, target.squeeze(1))*alpha_main
             elif isinstance(self, MultiHeaded2MultiheadAttentionGRU):
                 #instantiate loss
                 loss = 0
@@ -72,11 +74,11 @@ class MultiHead2MultiHeadBase(GeoBase):
                 out_L2, _ = self.decoder(out_L2, hn_L2)
                 out_L2 = self.fc(out_L2[:,-1,:])
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
-                loss += F.mse_loss(out_L1, target)*alpha_main
+                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type=='regression' else F.cross_entropy(out_L1, target.squeeze(1))*alpha_main
         else:
             fc1, mg1, target = batch
             out = self(fc1, mg1)
-            loss = F.mse_loss(out, target)
+            loss = F.mse_loss(out, target) if self.task_type == 'regression' else F.cross_entropy(out, target.squeeze(1))
         return loss
     def validation_step(self, batch):
         if self.encoder_forcing:
@@ -85,12 +87,17 @@ class MultiHead2MultiHeadBase(GeoBase):
             fc, mg, target = batch 
         pred = self(fc, mg)        
         #dst index or kp
-        loss = F.mse_loss(pred, target)
-        r2_ = r2(pred, target)
-        precision, recall, f1_score = compute_all(pred, target)
-        return {'val_loss': loss.detach(),'r2': r2_.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score}
+        loss = F.mse_loss(pred, target) if self.task_type == 'regression' else F.cross_entropy(pred, target.squeeze(1))
+        if self.task_type == 'regression':            
+            r2_ = r2(pred, target)
+            return {'val_loss': loss.detach(), 'r2': r2_.detach()}
+        else: 
+            accuracy, precision, recall, f1_score = compute_all(pred, target)
+            return {'val_loss': loss.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score, 'accuracy': accuracy}
 
-class SingleHead2MultiHead(nn.Module):
+class SingleHead2MultiHead(GeoBase):
+    def __init__(self, task = 'regression'):
+        GeoBase.__init__(self, task)
     def training_step(self, batch, weights:list, encoder_forcing):
         self.encoder_forcing = encoder_forcing
         if encoder_forcing:
@@ -112,7 +119,7 @@ class SingleHead2MultiHead(nn.Module):
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
                 out_L1 = out_L1[:, -1, :]
                 out_L1 = self.fc_decoder(out_L1)
-                loss += F.mse_loss(out_L1, target)*alpha_main
+                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1))*alpha_main
             elif isinstance(self, ResidualMultiheadAttentionGRU):
                 #instantiate loss
                 loss = 0
@@ -131,11 +138,11 @@ class SingleHead2MultiHead(nn.Module):
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
                 out_L1 = self.fc_decoder(out_L1)
                 out_L1 = out_L1[:, -1, :]
-                loss += F.mse_loss(out_L1, target)*alpha_main
+                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1))*alpha_main
         else:
             l1_data, target = batch
             out = self(l1_data)
-            loss = F.mse_loss(out, target)
+            loss = F.mse_loss(out, target) if self.task_type == 'regression' else F.cross_entropy(out, target.squeeze(1))
         return loss
     def validation_step(self, batch):
         if self.encoder_forcing:
@@ -144,44 +151,56 @@ class SingleHead2MultiHead(nn.Module):
             l1_data, target = batch 
         pred = self(l1_data)        
         #dst index or kp
-        loss = F.mse_loss(pred, target)
-        r2_ = r2(pred, target)
-        precision, recall, f1_score = compute_all(pred, target)
-        return {'val_loss': loss.detach(),'r2': r2_.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score}
+        loss = F.mse_loss(pred, target) if self.task_type == 'regression' else F.cross_entropy(pred, target.squeeze(1))
+        if self.task_type == 'regression':            
+            r2_ = r2(pred, target)
+            return {'val_loss': loss.detach(), 'r2': r2_.detach()}
+        else: 
+            accuracy, precision, recall, f1_score = compute_all(pred, target)
+            return {'val_loss': loss.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score, 'accuracy': accuracy}
 class ResidualMultiheadAttentionLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_heads: list, num_layers_lstm=1, dropout=0, bidirectional=True, overall_num_layers=1):
         super(ResidualMultiheadAttentionLSTM, self).__init__()
         self.input_size = input_size
         self.num_layers = overall_num_layers
         self.hidden_size = hidden_size*2 if bidirectional else hidden_size
+        self.bidirectional = bidirectional
         # Initialize lists for attention and LSTM layers
         self.attention_layers = nn.ModuleList()
         self.lstm_layers = nn.ModuleList()
+        self.attention_norm = nn.ModuleList()
         
         for _ in range(self.num_layers):
             # Attention
             self.attention_layers.append(nn.MultiheadAttention(input_size,  num_heads[0] if self.input_size==input_size else num_heads[1], batch_first=True))
             
             # Layer normalization after attention
-            self.attention_norm = nn.LayerNorm(input_size)
+            self.attention_norm.append(nn.LayerNorm(input_size))
             
             # LSTM
             self.lstm_layers.append(nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers_lstm, dropout=dropout, bidirectional=bidirectional, batch_first=True))
             
-            input_size = hidden_size if bidirectional is True else hidden_size * 2
+            input_size = hidden_size*2 if bidirectional else hidden_size
         
-    def forward(self, x):
+    def forward(self, x, hn = None, cn = None):
+        batch_size,_,_ = x.size()
+        if hn is None:
+            hn = torch.zeros(self.num_layers * (2 if self.bidirectional else 1), batch_size, self.hidden_size, requires_grad=True, device= 'cuda')
+        if cn is None:
+            cn = torch.zeros(self.num_layers * (2 if self.bidirectional else 1), batch_size, self.hidden_size, requires_grad=True, device = 'cuda')
         for layer_idx in range(self.num_layers):
             attn_out, _ = self.attention_layers[layer_idx](x, x, x)
-            attn_out = self.attention_norm(attn_out + x)
+            attn_out = self.attention_norm[layer_idx](attn_out + x)
             x, (hn, cn) = self.lstm_layers[layer_idx](attn_out)
-            x += attn_out
+            if layer_idx>0:               
+                x += attn_out
             
         return x, (hn, cn)
 
 class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
-    def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, output_size):
-        super(MultiHeaded2MultiheadAttentionLSTM, self).__init__()
+    def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, task = 'regression'):
+        super(MultiHeaded2MultiheadAttentionLSTM, self).__init__(task)
+        output_size = 1 if task=='regression' else 5
         self.input_size = encoder_fc.hidden_size + encoder_mg.hidden_size
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder_fc = encoder_fc
@@ -215,8 +234,9 @@ class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
         out = self.fc(out[:,-1,:])
         return out
 class Sing2MultiheadAttentionLSTM(SingleHead2MultiHead):
-    def __init__(self, encoder, decoder, num_heads, architecture, output_size):
-        super(MultiHeaded2MultiheadAttentionLSTM, self).__init__()
+    def __init__(self, encoder, decoder, num_heads, architecture, task = 'regression'):
+        super(MultiHeaded2MultiheadAttentionLSTM, self).__init__(task)
+        output_size = 1 if task == 'regression' else 5
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder = encoder
         self.decoder = decoder
@@ -240,7 +260,7 @@ class Sing2MultiheadAttentionLSTM(SingleHead2MultiHead):
 
 
 class ResidualMultiheadAttentionGRU(nn.Module):
-    def __init__(self, input_size, hidden_size, num_heads: list, num_layers_lstm=1, dropout=0, bidirectional=True, overall_num_layers=1):
+    def __init__(self, input_size, hidden_size, num_heads: list, num_layers_gru=1, dropout=0, bidirectional=True, overall_num_layers=1):
         super(ResidualMultiheadAttentionGRU, self).__init__()
         self.input_size = input_size
         self.num_layers = overall_num_layers
@@ -248,31 +268,34 @@ class ResidualMultiheadAttentionGRU(nn.Module):
         # Initialize lists for attention and LSTM layers
         self.attention_layers = nn.ModuleList()
         self.gru_layers = nn.ModuleList()
-        
+        self.attention_norm = nn.ModuleList()
         for _ in range(self.num_layers):
             # Attention
             self.attention_layers.append(nn.MultiheadAttention(input_size, num_heads[0] if self.input_size==input_size else num_heads[1], batch_first=True))
             
             # Layer normalization after attention
-            self.attention_norm = nn.LayerNorm(input_size)
+            self.attention_norm.append(nn.LayerNorm(input_size))
             
             # LSTM
-            self.gru_layers.append(nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers_lstm, dropout=dropout, bidirectional=bidirectional, batch_first=True))
+            self.gru_layers.append(nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers_gru, dropout=dropout, bidirectional=bidirectional, batch_first=True))
             
-            input_size = hidden_size if bidirectional is True else hidden_size * 2
+            input_size = hidden_size*2 if bidirectional else hidden_size
         
     def forward(self, x):
         for layer_idx in range(self.num_layers):
             attn_out, _ = self.attention_layers[layer_idx](x, x, x)
-            attn_out = self.attention_norm(attn_out + x)
+            attn_out = self.attention_norm[layer_idx](attn_out + x)
             x, hn = self.gru_layers[layer_idx](attn_out)
-            x += attn_out
+            if layer_idx>0:
+                x += attn_out
             
         return x, hn
 
 class MultiHeaded2MultiheadAttentionGRU(MultiHead2MultiHeadBase):
-    def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, output_size):
+    def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, task = 'regression'):
         super(MultiHeaded2MultiheadAttentionGRU, self).__init__()
+        MultiHead2MultiHeadBase.__init__(self, task)
+        output_size = 1 if task == 'regression' else 5
         #hidden
         self.input_size = encoder_fc.hidden_size + encoder_mg.hidden_size
         #encoder(LSTMWithMultiHeadAttention)
@@ -307,8 +330,10 @@ class MultiHeaded2MultiheadAttentionGRU(MultiHead2MultiHeadBase):
         return out
 
 class Sing2MultiheadAttentionGRU(SingleHead2MultiHead):
-    def __init__(self, encoder, decoder, num_heads: list, architecture, output_size):
+    def __init__(self, encoder, decoder, num_heads: list, architecture, task = 'regression'):
         super(MultiHeaded2MultiheadAttentionGRU, self).__init__()
+        SingleHead2MultiHead.__init__(self,task)
+        output_size = 1 if task == 'regression' else 5
         #encoder(LSTMWithMultiHeadAttention)
         self.encoder = encoder
         self.decoder = decoder

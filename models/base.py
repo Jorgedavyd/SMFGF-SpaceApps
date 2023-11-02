@@ -20,64 +20,71 @@ def r2(y_pred, y_true):
     
     return r2
 
-def threshold_predictions(predictions, threshold=-2.6):
-    # Convert regression predictions to binary (0 or 1) based on the threshold
-    binary_predictions = (predictions <= threshold).float()
-    return binary_predictions
-
-def acc(predictions, targets, threshold=-2.6):
-    binary_predictions = threshold_predictions(predictions, threshold)
-    correct = (binary_predictions == targets).sum().item()
-    total = targets.size(0)
-    accuracy = correct / total
-    return accuracy
-
-def compute_precision(predictions, targets, threshold=-2.6):
-    binary_predictions = threshold_predictions(predictions, threshold)
-    binary_targets = threshold_predictions(targets, threshold)
-    true_positives = ((binary_predictions == 1) & (binary_targets == 1)).sum()
-    false_positives = ((binary_predictions == 1) & (binary_targets == 0)).sum()
-    try:
-        precision = true_positives / (true_positives + false_positives)
-    except ZeroDivisionError:   
-        precision = torch.tensor([0])
+def multiclass_accuracy(predicted, target):
+    _, preds = torch.max(predicted, dim=1)
+    return torch.tensor(torch.sum(preds == target).item() / len(preds))
+def multiclass_precision(predicted, target):
+    _, preds = torch.max(predicted, dim=1)
+    correct = (preds == target).float()
+    true_positive = torch.sum(correct, dim=0)
+    false_positive = len(target) - true_positive
+    precision = true_positive / (true_positive + false_positive)
     return precision
 
-def compute_recall(predictions, targets, threshold=-2.6):
-    binary_predictions = threshold_predictions(predictions, threshold)
-    binary_targets = threshold_predictions(targets, threshold)
-    true_positives = ((binary_predictions == 1) & (binary_targets == 1)).sum()
-    false_negatives = ((binary_predictions == 0) & (binary_targets == 1)).sum()
-    recall = true_positives / (true_positives + false_negatives)
+def multiclass_recall(predicted, target):
+    _, preds = torch.max(predicted, dim=1)
+    correct = (preds == target).float()
+    true_positive = torch.sum(correct, dim=0)
+    false_negative = len(target) - true_positive
+    recall = true_positive / (true_positive + false_negative)
     return recall
 
-def compute_all(predictions, targets, threshold=-2.6):
-    precision = compute_precision(predictions, targets, threshold)
-    recall = compute_recall(predictions, targets, threshold)
+def compute_all(predictions, targets):
+    accuracy = multiclass_accuracy(predictions, targets)
+    precision = multiclass_precision(predictions, targets)
+    recall = multiclass_recall(predictions, targets)
     f1_score = 2 * (precision * recall) / (precision + recall)
-    return precision, recall, f1_score
+    return accuracy, precision, recall, f1_score
 
 class GeoBase(nn.Module):
+    def __init__(self, task: str):
+        super(GeoBase, self).__init__()
+        self.task_type = task
     def validation_epoch_end(self, outputs):
         batch_losses = [x['val_loss'] for x in outputs]
-        epoch_loss = torch.stack(batch_losses).mean()   # Sacar el valor expectado de todo el conjunto de costos
-        batch_r2 = [x['r2'] for x in outputs]
-        epoch_r2 = torch.stack(batch_r2).mean()   # Sacar el valor expectado de todo el conjunto de costos
-        batch_precision = [x['precision'] for x in outputs]
-        epoch_precision = torch.stack(batch_precision).mean()   # Sacar el valor expectado de todo el conjunto de costos
-        batch_recall = [x['recall'] for x in outputs]
-        epoch_recall = torch.stack(batch_recall).mean()   # Sacar el valor expectado de todo el conjunto de costos
-        batch_f1 = [x['f1'] for x in outputs]
-        epoch_f1 = torch.stack(batch_f1).mean()   # Sacar el valor expectado de todo el conjunto de costos
-        return {'val_loss': epoch_loss.item(), 'r2': epoch_r2.item(), 'precision': epoch_precision.item(), 'recall': epoch_recall.item(), 'f1': epoch_f1.item()}
+        epoch_loss = torch.stack(batch_losses).mean()
+        
+        if self.task_type == 'regression':
+            batch_metric = [x['r2'] for x in outputs]
+            epoch_r2 = torch.stack(batch_metric).mean()
+            return {'val_loss': epoch_loss.item(), 'r2': epoch_r2.item()}
+        else:
+            batch_accuracy = [x['accuracy'] for x in outputs]
+            epoch_accuracy = torch.stack(batch_accuracy).mean()
+            batch_precision = [x['precision'] for x in outputs]
+            epoch_precision = torch.stack(batch_precision).mean()
+            batch_recall = [x['recall'] for x in outputs]
+            epoch_recall = torch.stack(batch_recall).mean()
+            batch_f1 = [x['f1'] for x in outputs]
+            epoch_f1 = torch.stack(batch_f1).mean()
+            return {'val_loss': epoch_loss.item(), 'accuracy': epoch_accuracy.item(), 'precision': epoch_precision.item(), 'recall': epoch_recall.item(), 'f1': epoch_f1.item()}
 
-    def epoch_end(self, epoch, result): # Seguimiento del entrenamiento
-        print("Epoch [{}]:\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}\n\tr2_score: {:.4f}\n\tprecision: {:.4f}\n\trecall: {:.4f}\n\tf1_score: {:.4f}".format(
-            epoch, result['train_loss'], result['val_loss'], result['r2'], result['precision'], result['recall'], result['f1']))
-    
-    def epoch_end_one_cycle(self, epoch, result): # Seguimiento del entrenamiento
-        print("Epoch [{}]:\n\tlast_lr: {:.5f}\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}\n\tr2_score: {:.4f}\n\tprecision: {:.4f}\n\trecall: {:.4f}\n\tf1_score: {:.4f}".format(
-            epoch, result['lrs'][-1], result['train_loss'], result['val_loss'], result['r2'], result['precision'], result['recall'], result['f1']))
+    def epoch_end(self, epoch, result):
+        if self.task_type == 'regression':
+            print("Epoch [{}]:\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}\n\tr2_score: {:.4f}".format(
+                epoch, result['train_loss'], result['val_loss'], result['r2']))
+        else:
+            print("Epoch [{}]:\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}\n\taccuracy: {:.4f}\n\tprecision: {:.4f}\n\trecall: {:.4f}\n\tf1_score: {:.4f}".format(
+                epoch, result['train_loss'], result['val_loss'], result['accuracy'], result['precision'], result['recall'], result['f1']))
+
+    def epoch_end_one_cycle(self, epoch, result):
+        if self.task_type == 'regression':
+            print("Epoch [{}]:\n\tlast_lr: {:.5f}\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}\n\tr2_score: {:.4f}".format(
+                epoch, result['lrs'][-1], result['train_loss'], result['val_loss'], result['r2']))
+        else:
+            print("Epoch [{}]:\n\tlast_lr: {:.5f}\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}\n\taccuracy: {:.4f}\n\tprecision: {:.4f}\n\trecall: {:.4f}\n\tf1_score: {:.4f}".format(
+                epoch, result['lrs'][-1], result['train_loss'], result['val_loss'],result['accuracy'], result['precision'], result['recall'], result['f1']))
+        
     
     def evaluate(self, val_loader):
         self.eval()

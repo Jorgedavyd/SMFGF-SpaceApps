@@ -2,8 +2,9 @@ import torch.nn.functional as F
 import torch
 from models.base import *
 class Sing2MultNN(GeoBase):
-    def __init__(self, encoder, dst, kp):
+    def __init__(self, encoder, dst, kp, task = 'regression'):
         super(Sing2MultNN, self).__init__()
+        GeoBase.__init__(self, task)
         self.encoder = encoder
         self.fc_dst = dst #multiheaded neural network ##regression
         self.fc_kp = kp   #multiclass
@@ -28,13 +29,14 @@ class Sing2MultNN(GeoBase):
             out_kp_L1 = self.fc_kp(out_L1)
             out_kp_L2 = self.fc_kp(out_L2)
             loss += F.mse_loss(out_kp_L1, out_kp_L2)*alpha_out
-            loss += F.mse_loss(out_dst_L1, dst) *alpha_main
-            loss += F.mse_loss(out_kp_L1, kp) * alpha_main
+
+            loss += F.mse_loss(out_dst_L1, dst) *alpha_main if self.task_type == 'regression' else F.cross_entropy(out_dst_L1, dst)*alpha_main
+            loss += F.mse_loss(out_kp_L1, kp) * alpha_main if self.task_type == 'regression' else F.cross_entropy(out_kp_L1, kp)*alpha_main
         else:
             l1_data, dst, kp = batch
             out_dst, out_kp = self(l1_data)
-            loss = F.mse_loss(out_dst, dst)
-            loss += F.mse_loss(out_kp, kp)
+            loss = F.mse_loss(out_dst, dst) if self.task_type == 'regression' else F.cross_entropy(out_dst, dst)
+            loss += F.mse_loss(out_kp, kp) if self.task_type == 'regression' else F.cross_entropy(out_kp, kp)
         return loss
     def validation_step(self, batch):
         if self.encoder_forcing:
@@ -43,17 +45,22 @@ class Sing2MultNN(GeoBase):
             l1_data, dst, kp= batch 
         out_dst, out_kp = self(l1_data)        
         #dst index or kp
-        loss = F.mse_loss(out_dst, dst)
-        loss += F.mse_loss(out_kp, kp)
-        r2_ = r2(out_dst,dst)
-        r2_ += r2(out_kp,kp)
-        precision, recall, f1_score = compute_all(out_dst, dst)
-        precision_2, recall_2, f1_score_2 = compute_all(out_kp, kp) ##add threshold
-        return {'val_loss': loss.detach()/2,'r2': r2_.detach()/2, 'precision': (precision + precision_2)/2, 'recall': (recall + recall_2)/2, 'f1': (f1_score + f1_score_2)/2}
+        loss = F.mse_loss(out_dst, dst) if self.task_type == 'regression' else F.cross_entropy(out_dst, dst)
+        loss += F.mse_loss(out_kp, kp) if self.task_type == 'regression' else F.cross_entropy(out_kp, kp)
+        if self.task_type == 'regression':    
+            r2_ = r2(out_dst,dst)
+            r2_ += r2(out_kp,kp)
+            return {'val_loss': loss.detach()/2, 'r2': r2_.detach()/2}
+        else:
+            accuracy, precision, recall, f1_score = compute_all(out_dst, dst)
+            accuracy_2, precision_2, recall_2, f1_score_2 = compute_all(out_kp, kp) ##add threshold
+            return {'val_loss': loss.detach()/2,'accuracy':(accuracy+accuracy_2)/2, 'precision': (precision + precision_2)/2, 'recall': (recall + recall_2)/2, 'f1': (f1_score + f1_score_2)/2}
+            
 
 class Sing2Sing(GeoBase):
-    def __init__(self, encoder, fc):
+    def __init__(self, encoder, fc, task='regression'):
         super(Sing2Sing, self).__init__()
+        GeoBase.__init__(self, task)
         self.encoder = encoder
         self.fc = fc 
     def forward(self, x):
@@ -72,12 +79,12 @@ class Sing2Sing(GeoBase):
             loss += F.mse_loss(out_L1, out_L2)*alpha_encoder
             out_L1 = self.fc(out_L1[:, -1, :])
             out_L2 = self.fc(out_L2[:, -1, :])
-            loss += F.mse_loss(out_L1, out_L2)*alpha_out
-            loss += F.mse_loss(out_L1, target) * alpha_main
+            loss += F.mse_loss(out_L1, out_L2) * alpha_out
+            loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target)*alpha_main
         else:
             l1_data, target = batch
             out= self(l1_data)
-            loss = F.mse_loss(out, target)
+            loss = F.mse_loss(out, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out, target)*alpha_main
         return loss
 
     def validation_step(self, batch):
@@ -85,15 +92,19 @@ class Sing2Sing(GeoBase):
             l1_data,_, target = batch #decompose batch
         else:
             l1_data, target= batch 
-        out= self(l1_data)        
+        pred= self(l1_data)        
         #dst index or kp
-        loss = F.mse_loss(out, target)
-        r2_ = r2(out,target)
-        precision, recall, f1_score = compute_all(out, target)
-        return {'val_loss': loss.detach(),'r2': r2_.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score}
+        loss = F.mse_loss(pred, target) if self.task_type == 'regression' else F.cross_entropy(pred, target)
+        if self.task_type == 'regression':            
+            r2_ = r2(pred, target)
+            return {'val_loss': loss.detach(), 'r2': r2_.detach()}
+        else: 
+            accuracy, precision, recall, f1_score = compute_all(pred, target)
+            return {'val_loss': loss.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score, 'accuracy': accuracy}
 class Mult2Sing(GeoBase):
-    def __init__(self, encoder_fc, encoder_mg, fc):
+    def __init__(self, encoder_fc, encoder_mg, fc, task = 'regression'):
         super(Mult2Sing, self).__init__()
+        GeoBase.__init__(self, task)
         self.encoder_fc = encoder_fc
         self.encoder_mg = encoder_mg
         self.fc = fc #sum of both hiddens at input_size
@@ -121,11 +132,11 @@ class Mult2Sing(GeoBase):
             out_L1 = self.fc(out_L1)
             out_L2 = self.fc(out_L2)
             loss += F.mse_loss(out_L1, out_L2)*alpha_out
-            loss += F.mse_loss(out_L1, target) * alpha_main
+            loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target)*alpha_main
         else:
             fc1, mg1, target = batch
             out = self(fc1, mg1)
-            loss = F.mse_loss(out, target)
+            loss = F.mse_loss(out, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out, target)*alpha_main
         return loss
 
     def validation_step(self, batch):
@@ -133,9 +144,13 @@ class Mult2Sing(GeoBase):
             fc1, mg1, _,_, target = batch #decompose batch
         else:
             fc1, mg1, target= batch 
-        out = self(fc1, mg1)        
+        pred = self(fc1, mg1)        
         #dst index or kp
-        loss = F.mse_loss(out, target)
-        r2_ = r2(out,target)
-        precision, recall, f1_score = compute_all(out, target)
-        return {'val_loss': loss.detach(),'r2': r2_.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score}
+        loss = F.mse_loss(pred, target) if self.task_type == 'regression' else F.cross_entropy(pred, target)
+        if self.task_type == 'regression':            
+            r2_ = r2(pred, target)
+            return {'val_loss': loss.detach(), 'r2': r2_.detach()}
+        else: 
+            accuracy, precision, recall, f1_score = compute_all(pred, target)
+            return {'val_loss': loss.detach(), 'precision': precision, 'recall': recall, 'f1': f1_score, 'accuracy': accuracy}
+

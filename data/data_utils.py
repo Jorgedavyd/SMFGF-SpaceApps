@@ -44,11 +44,33 @@ def map_kp_index_to_interval(kp_index):
 
     return kp_mapping[kp_index]
     
-
+def kp_to_gscale(kp_index):
+    if kp_index < 4:
+        return 0  # No Geomagnetic Storm
+    elif kp_index < 5.67:
+        return 1  # G1
+    elif kp_index < 6.67:
+        return 2  # G2
+    elif kp_index < 7.67:
+        return 3  # G3
+    else: 
+        return 4 #G4 or G5
+    
+def dst_to_gscale(dst_index):
+    if dst_index >= -30:
+        return 0  # No Geomagnetic Storm
+    elif dst_index >= -50:
+        return 1  # G1
+    elif dst_index >= -100:
+        return 2  # G2
+    elif dst_index >= -200:
+        return 3  # G3
+    else:
+        return 4 #G4 or G5
 
 #We need the pred_length to be of size divisible by 3 if possible
 class RefinedTrainingDataset(Dataset):
-    def __init__(self, l1_df, l2_df, dst_series, kp_series, sequence_length, prediction_length, hour = False, time_step_ahead = 0):
+    def __init__(self, l1_df, l2_df, dst_series, kp_series, sequence_length, prediction_length, hour = False, time_step_ahead = 0, multiclass = True):
         self.time_ahead = time_step_ahead
         #other parameters
         self.sequence_length = sequence_length
@@ -60,13 +82,15 @@ class RefinedTrainingDataset(Dataset):
         #l2 scaler
         self.x_hat_scaler = StandardScaler()
         self.pro = self.x_hat_scaler.fit_transform(l2_df.values)
-        #dst scaler
-        self.dst_scaler = StandardScaler() #
-        self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
-        #Kp scaler
-        self.kp_scaler = StandardScaler() #
-        self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
-        self.kp = self.kp_scaler.fit_transform(self.kp)
+        if multiclass:
+            self.dst = dst_series.apply(dst_to_gscale).values.reshape(-1,1)
+            self.kp = kp_series.apply(map_kp_index_to_interval).apply(dst_to_gscale).values.reshape(-1,1)
+        else:
+            self.dst_scaler = StandardScaler() #
+            self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
+            self.kp_scaler = StandardScaler() #
+            self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
+            self.kp = self.kp_scaler.fit_transform(self.kp)
 
     def __len__(self):
         if self.mode:
@@ -90,18 +114,20 @@ class RefinedTrainingDataset(Dataset):
         return l1_sample, l2_sample, dst, kp
 
 class NormalTrainingDataset(Dataset):
-    def __init__(self, l1_df, dst_series, kp_series, sequence_length, prediction_length, hour = False, time_step_ahead = 0):
+    def __init__(self, l1_df, dst_series, kp_series, sequence_length, prediction_length, hour = False, time_step_ahead = 0, multiclass = True):
         self.time_ahead = time_step_ahead
         #normalize features
         self.x_scaler = StandardScaler()
         self.features = self.x_scaler.fit_transform(l1_df.values)
-        #dst scaler
-        self.dst_scaler = StandardScaler() #
-        self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
-        #Kp scaler
-        self.kp_scaler = StandardScaler() #
-        self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
-        self.kp = self.kp_scaler.fit_transform(self.kp)
+        if multiclass:
+            self.dst = dst_series.apply(dst_to_gscale).values.reshape(-1,1)
+            self.kp = kp_series.apply(map_kp_index_to_interval).apply(dst_to_gscale).values.reshape(-1,1)
+        else:
+            self.dst_scaler = StandardScaler() #
+            self.dst = self.dst_scaler.fit_transform(dst_series.values.reshape(-1,1))
+            self.kp_scaler = StandardScaler() #
+            self.kp = kp_series.apply(map_kp_index_to_interval).values.reshape(-1,1)
+            self.kp = self.kp_scaler.fit_transform(self.kp)
         #other parameters
         self.sequence_length = sequence_length
         self.mode = hour
@@ -126,7 +152,7 @@ class NormalTrainingDataset(Dataset):
 
 dict_values = ['dst_kyoto', 'kp_gfz']
 class MainToSingleTarget(Dataset):
-    def __init__(self, l1_df, target, sequence_length, prediction_length, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0, dae = False):
+    def __init__(self, l1_df, target, sequence_length, prediction_length, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0, dae = False, multiclass = False):
         self.sep = sep
         self.dae = dae
         self.time_ahead = time_step_ahead
@@ -149,11 +175,17 @@ class MainToSingleTarget(Dataset):
             self.l1_data = self.x_scaler.fit_transform(l1_df.values)
             if self.encoder_forcing:
                 self.l2_data = self.x_scaler.transform(l2_df.values)
-        #dst scaler
-        self.y_scaler = StandardScaler() #
-        if target_mode == 'kp_gfz':
-            target = target.apply(map_kp_index_to_interval)
-        self.target = self.y_scaler.fit_transform(target.values.reshape(-1,1))
+        if multiclass:
+            if target_mode == 'kp_gfz':
+                self.target = target.apply(map_kp_index_to_interval).apply(kp_to_gscale).values.reshape(-1,1)
+            elif target_mode == 'dst_kyoto':
+                self.target = target.apply(dst_to_gscale).values.reshape(-1,1)
+        else:
+            #target scaler
+            self.y_scaler = StandardScaler() #
+            if target_mode =='kp_gfz':
+                target = target.apply(map_kp_index_to_interval)
+            self.target = self.y_scaler.fit_transform(target.values.reshape(-1,1))
         #other parameters
         self.sequence_length = sequence_length
         self.mode = hour
