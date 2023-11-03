@@ -22,28 +22,29 @@ def r2(y_pred, y_true):
 
 def multiclass_accuracy(predicted, target):
     _, preds = torch.max(predicted, dim=1)
-    return torch.tensor(torch.sum(preds == target).item() / len(preds))
+    return torch.tensor(torch.sum(preds == target).item() / len(target))
+
 def multiclass_precision(predicted, target):
     _, preds = torch.max(predicted, dim=1)
     correct = (preds == target).float()
-    true_positive = torch.sum(correct, dim=0)
-    false_positive = len(target) - true_positive
-    precision = true_positive / (true_positive + false_positive)
-    return precision
+    true_positive = torch.sum(correct).item()
+    false_positive = torch.sum(preds != target).item()
+    precision = true_positive / (true_positive + false_positive + 1e-7)
+    return torch.tensor(precision)
 
 def multiclass_recall(predicted, target):
     _, preds = torch.max(predicted, dim=1)
     correct = (preds == target).float()
-    true_positive = torch.sum(correct, dim=0)
-    false_negative = len(target) - true_positive
-    recall = true_positive / (true_positive + false_negative)
-    return recall
+    true_positive = torch.sum(correct).item()
+    false_negative = torch.sum(preds != target).item()
+    recall = true_positive / (true_positive + false_negative + 1e-7)
+    return torch.tensor(recall)
 
 def compute_all(predictions, targets):
     accuracy = multiclass_accuracy(predictions, targets)
     precision = multiclass_precision(predictions, targets)
     recall = multiclass_recall(predictions, targets)
-    f1_score = 2 * (precision * recall) / (precision + recall)
+    f1_score = 2 * (precision * recall) / (precision + recall + 1e-7)
     return accuracy, precision, recall, f1_score
 
 class GeoBase(nn.Module):

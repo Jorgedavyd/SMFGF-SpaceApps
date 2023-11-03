@@ -31,7 +31,7 @@ class DeepNeuralNetwork(nn.Module):
 # Attention based RNNs
 class Attention(nn.Module):
     def __init__(self, input_size, num_heads = 1):
-        super(MultiHeadAttention, self).__init__()
+        super(Attention, self).__init__()
         self.attn = nn.MultiheadAttention(input_size, num_heads, batch_first = True)
         self.layer_norm = nn.LayerNorm(input_size)
     

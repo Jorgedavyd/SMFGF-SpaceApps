@@ -42,7 +42,7 @@ class MultiHead2MultiHeadBase(GeoBase):
                 out_L2, (_,_) = self.decoder(out_L2, hn_L2, cn_L2)
                 out_L2 = self.fc(out_L2[:,-1,:])
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
-                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type=='regression' else F.cross_entropy(out_L1, target.squeeze(1))*alpha_main
+                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type=='regression' else F.cross_entropy(out_L1, target.squeeze(1).to(torch.long))*alpha_main
             elif isinstance(self, MultiHeaded2MultiheadAttentionGRU):
                 #instantiate loss
                 loss = 0
@@ -74,11 +74,11 @@ class MultiHead2MultiHeadBase(GeoBase):
                 out_L2, _ = self.decoder(out_L2, hn_L2)
                 out_L2 = self.fc(out_L2[:,-1,:])
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
-                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type=='regression' else F.cross_entropy(out_L1, target.squeeze(1))*alpha_main
+                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type=='regression' else F.cross_entropy(out_L1, target.squeeze(1).to(torch.long))*alpha_main
         else:
             fc1, mg1, target = batch
             out = self(fc1, mg1)
-            loss = F.mse_loss(out, target) if self.task_type == 'regression' else F.cross_entropy(out, target.squeeze(1))
+            loss = F.mse_loss(out, target) if self.task_type == 'regression' else F.cross_entropy(out, target.squeeze(1).to(torch.long))
         return loss
     def validation_step(self, batch):
         if self.encoder_forcing:
@@ -87,7 +87,7 @@ class MultiHead2MultiHeadBase(GeoBase):
             fc, mg, target = batch 
         pred = self(fc, mg)        
         #dst index or kp
-        loss = F.mse_loss(pred, target) if self.task_type == 'regression' else F.cross_entropy(pred, target.squeeze(1))
+        loss = F.mse_loss(pred, target) if self.task_type == 'regression' else F.cross_entropy(pred, target.squeeze(1).to(torch.long))
         if self.task_type == 'regression':            
             r2_ = r2(pred, target)
             return {'val_loss': loss.detach(), 'r2': r2_.detach()}
@@ -119,7 +119,7 @@ class SingleHead2MultiHead(GeoBase):
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
                 out_L1 = out_L1[:, -1, :]
                 out_L1 = self.fc_decoder(out_L1)
-                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1))*alpha_main
+                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1).to(torch.long))*alpha_main
             elif isinstance(self, ResidualMultiheadAttentionGRU):
                 #instantiate loss
                 loss = 0
@@ -138,11 +138,11 @@ class SingleHead2MultiHead(GeoBase):
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
                 out_L1 = self.fc_decoder(out_L1)
                 out_L1 = out_L1[:, -1, :]
-                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1))*alpha_main
+                loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1).to(torch.long))*alpha_main
         else:
             l1_data, target = batch
             out = self(l1_data)
-            loss = F.mse_loss(out, target) if self.task_type == 'regression' else F.cross_entropy(out, target.squeeze(1))
+            loss = F.mse_loss(out, target) if self.task_type == 'regression' else F.cross_entropy(out, target.squeeze(1).to(torch.long))
         return loss
     def validation_step(self, batch):
         if self.encoder_forcing:
@@ -151,7 +151,7 @@ class SingleHead2MultiHead(GeoBase):
             l1_data, target = batch 
         pred = self(l1_data)        
         #dst index or kp
-        loss = F.mse_loss(pred, target) if self.task_type == 'regression' else F.cross_entropy(pred, target.squeeze(1))
+        loss = F.mse_loss(pred, target) if self.task_type == 'regression' else F.cross_entropy(pred, target.squeeze(1).to(torch.long))
         if self.task_type == 'regression':            
             r2_ = r2(pred, target)
             return {'val_loss': loss.detach(), 'r2': r2_.detach()}
@@ -190,10 +190,12 @@ class ResidualMultiheadAttentionLSTM(nn.Module):
             cn = torch.zeros(self.num_layers * (2 if self.bidirectional else 1), batch_size, self.hidden_size, requires_grad=True, device = 'cuda')
         for layer_idx in range(self.num_layers):
             attn_out, _ = self.attention_layers[layer_idx](x, x, x)
-            attn_out = self.attention_norm[layer_idx](attn_out + x)
-            x, (hn, cn) = self.lstm_layers[layer_idx](attn_out)
+            attn_out = self.attention_norm[layer_idx](attn_out)
+            lstm_out, (hn, cn) = self.lstm_layers[layer_idx](attn_out)
             if layer_idx>0:               
-                x += attn_out
+                x = lstm_out + x
+            else:
+                x = lstm_out
             
         return x, (hn, cn)
 
@@ -285,9 +287,11 @@ class ResidualMultiheadAttentionGRU(nn.Module):
         for layer_idx in range(self.num_layers):
             attn_out, _ = self.attention_layers[layer_idx](x, x, x)
             attn_out = self.attention_norm[layer_idx](attn_out + x)
-            x, hn = self.gru_layers[layer_idx](attn_out)
+            gru_out, hn = self.gru_layers[layer_idx](attn_out)
             if layer_idx>0:
-                x += attn_out
+                x = gru_out + x
+            else:
+                x = gru_out
             
         return x, hn
 
