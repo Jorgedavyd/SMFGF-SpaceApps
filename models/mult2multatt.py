@@ -107,8 +107,8 @@ class SingleHead2MultiHead(GeoBase):
                 alpha_encoder, alpha_out, alpha_main = weights
                 l1_data, l2_data, target = batch #decompose batch
                 
-                out_L1, (hn_L1, cn_L1) = self.lstm_encoder(l1_data)
-                out_L2, (hn_L2, cn_L2) = self.lstm_encoder(l2_data)
+                out_L1, (hn_L1, cn_L1) = self.encoder(l1_data)
+                out_L2, (hn_L2, cn_L2) = self.encoder(l2_data)
                 loss += F.mse_loss(out_L1, out_L2)*alpha_encoder
                 ctx_L1, _ = self.multatt(out_L1,out_L1, out_L1)
                 out_L1 = self.layernorm(ctx_L1+out_L1)
