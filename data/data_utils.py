@@ -152,7 +152,8 @@ class NormalTrainingDataset(Dataset):
 
 dict_values = ['dst_kyoto', 'kp_gfz']
 class MainToSingleTarget(Dataset):
-    def __init__(self, l1_df, target, sequence_length, prediction_length, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0, dae = False, multiclass = False):
+    def __init__(self, l1_df, target, sequence_length, prediction_length = 1, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0, dae = False, multiclass = False, device = 'cuda'):
+        self.device = device
         self.sep = sep
         self.dae = dae
         self.time_ahead = time_step_ahead
@@ -193,6 +194,8 @@ class MainToSingleTarget(Dataset):
         self.sep = sep
         self.target_mode = target_mode
     def __len__(self):
+        if self.dae:
+            return self.l1_data.shape[0] - self.sequence_length + 1
         if self.sep:
             if self.mode:
                 return self.fc.shape[0] - (self.sequence_length + self.pred_length + self.time_ahead) + 1
@@ -204,13 +207,22 @@ class MainToSingleTarget(Dataset):
             else:
                 return self.l1_data.shape[0] - (self.sequence_length + 60*self.pred_length + self.time_ahead) + 1
     def __getitem__(self, idx):
+        if isinstance(idx, slice):
+            start = idx.start
+            stop = idx.stop
+            step = idx.step or 1
+            items = [self.__getitem__(i) for i in range(start, stop, step)]
+            return items
+        if isinstance(idx, list):
+            items = [self.__getitem__(i) for i in idx]
+            return items
         if self.dae:
             if self.encoder_forcing == False:
                 return 'You have to give l2 dataframe'
             l1_data = self.l1_data[idx:idx+self.sequence_length, :]
             l2_data = self.l2_data[idx:idx+self.sequence_length, :]
-            l1_data = torch.tensor(l1_data, dtype = torch.float32)
-            l2_data = torch.tensor(l2_data, dtype = torch.float32)
+            l1_data = torch.tensor(l1_data, dtype = torch.float32, device = self.device)
+            l2_data = torch.tensor(l2_data, dtype = torch.float32, device = self.device)
             return l1_data, l2_data
         if self.mode:
             if self.target_mode == 'kp_gfz':
@@ -222,25 +234,25 @@ class MainToSingleTarget(Dataset):
                 target = self.target[hour_to_3_hour(min_to_hour(idx+self.sequence_length))+ self.time_ahead:hour_to_3_hour(min_to_hour(idx+self.sequence_length))+hour_to_3_hour(self.pred_length)+ self.time_ahead]
             elif self.target_mode == 'dst_kyoto':
                 target = self.target[min_to_hour(idx+self.sequence_length)+ self.time_ahead:min_to_hour(idx+self.sequence_length)+self.pred_length+ self.time_ahead]
-        target = torch.tensor(target).squeeze(1)
+        target = torch.tensor(target, device = self.device).squeeze(1)
         if self.sep:
             fc = self.fc[idx:idx+self.sequence_length, :]
             mg = self.mg[idx:idx+self.sequence_length, :]
-            fc = torch.tensor(fc, dtype=torch.float32)
-            mg = torch.tensor(mg, dtype=torch.float32)
+            fc = torch.tensor(fc, dtype=torch.float32, device = self.device)
+            mg = torch.tensor(mg, dtype=torch.float32, device = self.device)
             if self.encoder_forcing:
                 f1m = self.f1m[idx:idx+self.sequence_length, :]
                 m1m = self.m1m[idx:idx+self.sequence_length, :]
-                f1m = torch.tensor(f1m, dtype=torch.float32)
-                m1m = torch.tensor(m1m, dtype=torch.float32)
+                f1m = torch.tensor(f1m, dtype=torch.float32, device = self.device)
+                m1m = torch.tensor(m1m, dtype=torch.float32, device = self.device)
                 return fc, mg, f1m, m1m, target
             return fc, mg, target
         else:
             l1_data = self.l1_data[idx:idx+self.sequence_length, :]
-            l1_data = torch.tensor(l1_data, dtype=torch.float32)
+            l1_data = torch.tensor(l1_data, dtype=torch.float32, device = self.device)
             if self.encoder_forcing:
                 l2_data = self.l2_data[idx: idx+self.sequence_length, :]
-                l2_data = torch.tensor(l2_data, dtype = torch.float32)
+                l2_data = torch.tensor(l2_data, dtype = torch.float32, device = self.device)
                 return l1_data, l2_data, target
             return l1_data, target
     
