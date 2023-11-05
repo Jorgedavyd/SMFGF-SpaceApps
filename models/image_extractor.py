@@ -12,7 +12,7 @@ class FeatureExtractorResnet50(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = False
         
-        self.model.fc = DeepNeuralNetwork(1280, 100, architecture)
+        self.model.fc = DeepNeuralNetwork(1280, 100, *architecture)
         
         self.transform = tt.Compose([tt.ToTensor(), ResNet50_Weights.IMAGENET1K_V2.transforms(antialias=True)])
     def forward(self, x):
@@ -29,7 +29,7 @@ class FeatureExtractorVGG19(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = False
         
-        self.model.classifier = DeepNeuralNetwork(1280, 100, architecture)
+        self.model.classifier = DeepNeuralNetwork(1280, 100, *architecture)
         
         self.transform = tt.Compose([tt.ToTensor(), VGG19_Weights.IMAGENET1K_V1.transforms(antialias=True)])
     def forward(self, x):
