@@ -1,5 +1,4 @@
 import torch.nn.functional as F
-from models.df_models import *
 from models.utils import *
 from models.base import *
 class MultiHead2MultiHeadBase(GeoBase):
