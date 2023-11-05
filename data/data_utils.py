@@ -152,7 +152,7 @@ class NormalTrainingDataset(Dataset):
 
 dict_values = ['dst_kyoto', 'kp_gfz']
 class MainToSingleTarget(Dataset):
-    def __init__(self, l1_df, target, sequence_length, prediction_length = 1, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0, dae = False, multiclass = False, device = 'cuda'):
+    def __init__(self, l1_df, target, sequence_length, prediction_length = 1, hour = False, sep = False, target_mode:str = 'dst_kyoto', l2_df = None, time_step_ahead = 0, dae = False, multiclass = False, device = 'cpu'):
         self.device = device
         self.sep = sep
         self.dae = dae
