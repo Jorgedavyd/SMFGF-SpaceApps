@@ -108,15 +108,15 @@ class SingleHead2MultiHead(GeoBase):
                 out_L1, (hn_L1, cn_L1) = self.encoder(l1_data)
                 out_L2, (hn_L2, cn_L2) = self.encoder(l2_data)
                 loss += F.mse_loss(out_L1, out_L2)*alpha_encoder
-                ctx_L1, _ = self.multatt(out_L1,out_L1, out_L1)
-                out_L1 = self.layernorm(ctx_L1+out_L1)
-                ctx_L2, _ = self.multatt(out_L2,out_L2, out_L2)
-                out_L2 = self.layernorm(ctx_L2+out_L2)
-                out_L1, (_,_) = self.lstm_decoder(out_L1, (hn_L1, cn_L1))
-                out_L2, (_,_) = self.lstm_decoder(out_L2, (hn_L2, cn_L2))
+                ctx_L1, _ = self.attention(out_L1,out_L1, out_L1)
+                out_L1 = self.layer_norm(ctx_L1+out_L1)
+                ctx_L2, _ = self.attention(out_L2,out_L2, out_L2)
+                out_L2 = self.layer_norm(ctx_L2+out_L2)
+                out_L1, (_,_) = self.decoder(out_L1, (hn_L1, cn_L1))
+                out_L2, (_,_) = self.decoder(out_L2, (hn_L2, cn_L2))
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
                 out_L1 = out_L1[:, -1, :]
-                out_L1 = self.fc_decoder(out_L1)
+                out_L1 = self.fc(out_L1)
                 loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1).to(torch.long))*alpha_main
             elif isinstance(self, ResidualMultiheadAttentionGRU):
                 #instantiate loss
@@ -124,17 +124,17 @@ class SingleHead2MultiHead(GeoBase):
                 alpha_encoder, alpha_out, alpha_main = weights
                 l1_data, l2_data, target = batch #decompose batch
                 
-                out_L1, hn_L1 = self.gru_encoder(l1_data)
-                out_L2, hn_L2 = self.gru_encoder(l2_data)
+                out_L1, hn_L1 = self.encoder(l1_data)
+                out_L2, hn_L2 = self.encoder(l2_data)
                 loss += F.mse_loss(out_L1, out_L2)*alpha_encoder
-                ctx_L1, _ = self.multatt(out_L1,out_L1, out_L1)
-                out_L1 = self.layernorm(ctx_L1+out_L1)
-                ctx_L2, _ = self.multatt(out_L2,out_L2, out_L2)
-                out_L2 = self.layernorm(ctx_L2+out_L2)
-                out_L1, _ = self.gru_decoder(out_L1, hn_L1)
-                out_L2, _ = self.gru_decoder(out_L2, hn_L2)
+                ctx_L1, _ = self.attention(out_L1,out_L1, out_L1)
+                out_L1 = self.layer_norm(ctx_L1+out_L1)
+                ctx_L2, _ = self.attention(out_L2,out_L2, out_L2)
+                out_L2 = self.layer_norm(ctx_L2+out_L2)
+                out_L1, _ = self.decoder(out_L1, hn_L1)
+                out_L2, _ = self.decoder(out_L2, hn_L2)
                 loss += F.mse_loss(out_L1, out_L2)*alpha_out
-                out_L1 = self.fc_decoder(out_L1)
+                out_L1 = self.fc(out_L1)
                 out_L1 = out_L1[:, -1, :]
                 loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1).to(torch.long))*alpha_main
         else:

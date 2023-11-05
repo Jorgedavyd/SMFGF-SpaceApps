@@ -6,39 +6,31 @@ def get_lr(optimizer):
         return param_group['lr'] # Seguimiento del learning rate
     
 def r2(y_pred, y_true):
-    # Calculate the mean of the true values
     mean = torch.mean(y_true)
-
-    # Calculate the total sum of squares
     ss_total = torch.sum((y_true - mean) ** 2)
-
-    # Calculate the residual sum of squares
     ss_residual = torch.sum((y_true - y_pred) ** 2)
-
-    # Calculate R2 score
     r2 = 1 - (ss_residual / ss_total)
-    
     return r2
 
 def multiclass_accuracy(predicted, target):
     _, preds = torch.max(predicted, dim=1)
-    return torch.tensor(torch.sum(preds == target).item() / len(target))
+    return torch.sum(preds == target) / len(target)
 
 def multiclass_precision(predicted, target):
     _, preds = torch.max(predicted, dim=1)
     correct = (preds == target).float()
-    true_positive = torch.sum(correct).item()
-    false_positive = torch.sum(preds != target).item()
+    true_positive = torch.sum(correct)
+    false_positive = torch.sum(preds != target)
     precision = true_positive / (true_positive + false_positive + 1e-7)
-    return torch.tensor(precision)
+    return precision
 
 def multiclass_recall(predicted, target):
     _, preds = torch.max(predicted, dim=1)
     correct = (preds == target).float()
-    true_positive = torch.sum(correct).item()
-    false_negative = torch.sum(preds != target).item()
+    true_positive = torch.sum(correct)
+    false_negative = torch.sum(preds != target)
     recall = true_positive / (true_positive + false_negative + 1e-7)
-    return torch.tensor(recall)
+    return recall
 
 def compute_all(predictions, targets):
     accuracy = multiclass_accuracy(predictions, targets)
