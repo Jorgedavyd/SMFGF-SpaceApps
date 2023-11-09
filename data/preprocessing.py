@@ -9,295 +9,142 @@ from bs4 import BeautifulSoup
 from datetime import date
 import pandas as pd
 import numpy as np
+import io 
+import csv
+import zipfile
+import tarfile
 
-def import_train(scrap_date):
-    os.makedirs('data/compressed', exist_ok=True)
-    os.makedirs('data/uncompressed', exist_ok=True)
-    with open('data/URLs.csv', 'r') as file:
-        lines = file.readlines()
-    url_list = []
-    for url in lines:
-        for date in scrap_date:
-            if date+'000000' in url:
-                url_list.append(url)
-    for url in url_list:
-        root = 'data/compressed'
-        filename = url.split('_')[1] + '_'+url.split('_')[3][1:-6]+'.nc.gz'
-        if filename in os.listdir(root):
-            continue
-        else:
-            download_url(url, root, filename)
+class SOHO:
+    def __init__(self):
+        pass
+    """
+    SEM
+    
+    The Solar Electron and Proton Monitor (SEM) measures the energy 
+    spectrum and composition of solar and galactic cosmic rays,
+    as well as solar protons. An increase in solar proton flux can 
+    be associated with solar flares and CMEs, which can, in turn, 
+    influence geomagnetic activity.
+    """
+    def SEM(self, scrap_date):
+        #getting dates
+        csv_root = 'data/SOHO/SEM.csv' #define the root
+        years = list(set([date[:4] for date in scrap_date]))
+        try:
+            #getting the csv
+            root = 'data/SOHO/'
+            os.makedirs(root)
+            name = 'CELIAS_Proton_Monitor_5min.tar.gz'
+            url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_Proton_Monitor_5min.tar.gz'
+            download_url(url, root, name)
+            with tarfile.open(os.path.join(root, name), 'r') as tar:
+                tar.extractall(root)
+            
+            # Create a CSV output buffer
+            output_buffer = io.StringIO()
+            csv_writer = csv.writer(output_buffer)
 
-#format: YYYYMMDD000000
-def automated_preprocessing(scrap_date: list, sep = False):
-    os.makedirs('data/compressed', exist_ok=True)
-    os.makedirs('data/uncompressed', exist_ok=True)
-    os.makedirs('data/DSCOVR_L2/faraday', exist_ok=True)
-    os.makedirs('data/DSCOVR_L1/faraday', exist_ok=True)
-    os.makedirs('data/DSCOVR_L2/magnetometer', exist_ok=True)
-    os.makedirs('data/DSCOVR_L1/magnetometer', exist_ok=True)
-    with open('data/URLs.csv', 'r') as file:
-        lines = file.readlines()
-    url_list = []
-    for url in lines:
-        for date in scrap_date:
-            if date+'000000' in url:
-                url_list.append(url)
-    for url in url_list:
-        root = 'data/compressed'
-        filename = url.split('_')[1] + '_'+url.split('_')[3][1:-6]+'.nc.gz'
-        if filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L2/faraday') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L1/faraday') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L1/magnetometer') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L2/magnetometer'):
-            continue
-        elif filename[:-3] in os.listdir('data/uncompressed'):
-            output_file = os.path.join('data/uncompressed',filename)[:-3]
+            # Write the CSV header
+            csv_header = [
+                "YY", "MON", "DY", "DOY:HH:MM:SS", "SPEED", "Np", "Vth", "N/S", "V_He"
+                ]
+            csv_writer.writerow(csv_header)
+            for year in years:
+                file = f'data/SOHO/{year}_CELIAS_Proton_Monitor_5min.zip'
+                with zipfile.ZipFile(file, 'r') as archive:
+                    with archive.open(f'{year}_CELIAS_Proton_Monitor_5min.txt') as txt:
+                        lines = txt.readlines()
+                        for line in lines[29:]:
+                            data = line.split()[:-7] #ignores the position of SOHO
+                            data = [item.decode('utf-8') for item in data]
+                            csv_writer.writerow(data)
+                os.remove(file)
+
+            csv_content = output_buffer.getvalue()
+
+            output_buffer.close()
+            with open(csv_root, "w", newline="") as csv_file:
+                csv_file.write(csv_content)        
+        except FileExistsError:
             pass
-        else:
-            download_url(url, root, filename)
-            file = os.path.join(root,filename)
-            output_file = os.path.join('data/uncompressed',filename)[:-3]
-            with gzip.open(file, 'rb') as compressed_file:
-                    with open(output_file, 'wb') as decompressed_file:
-                        decompressed_file.write(compressed_file.read())
-            os.remove(file)
-        if 'fc1' in filename:
-            dataset = xr.open_dataset(output_file)
-
-            df = dataset.to_dataframe()
-
-            dataset.close()
-
-            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
-
-            faraday_cup = df[important_variables]
-
-            faraday_cup = faraday_cup.resample('1min').mean()
-
-            faraday_cup.to_csv(f'data/DSCOVR_L1/faraday/{filename[:-6]}.csv')
-
-            os.remove(output_file)
-
-        elif 'f1m' in filename:
-            dataset = xr.open_dataset(output_file)
-
-            df = dataset.to_dataframe()
-
-            dataset.close()
-
-            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
-
-            faraday_cup = df[important_variables]
-
-            faraday_cup.to_csv(f'data/DSCOVR_L2/faraday/{filename[:-6]}.csv')
+        celias_proton_monitor = pd.read_csv(csv_root)
+        return celias_proton_monitor
+    
+    """CELIAS PROTON MONITOR"""
+    """It has YY,MON,DY,DOY:HH:MM:SS,SPEED,Np,Vth,N/S,V_He"""
+    def CELIAS_Proton_Monitor_data(self, scrap_date):
+        #getting dates
+        csv_root = 'data/SOHO/CELIAS_proton.csv' #define the root
+        years = list(set([date[:4] for date in scrap_date]))
+        try:
+            #getting the csv
+            root = 'data/SOHO/'
+            os.makedirs(root)
+            name = 'CELIAS_Proton_Monitor_5min.tar.gz'
+            url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_Proton_Monitor_5min.tar.gz'
+            download_url(url, root, name)
+            with tarfile.open(os.path.join(root, name), 'r') as tar:
+                tar.extractall(root)
             
-            os.remove(output_file)
-        elif 'm1m' in filename:
-            dataset = xr.open_dataset(output_file)
+            # Create a CSV output buffer
+            output_buffer = io.StringIO()
+            csv_writer = csv.writer(output_buffer)
 
-            df = dataset.to_dataframe()
+            # Write the CSV header
+            csv_header = [
+                "YY", "MON", "DY", "DOY:HH:MM:SS", "SPEED", "Np", "Vth", "N/S", "V_He"
+                ]
+            csv_writer.writerow(csv_header)
+            for year in years:
+                file = f'data/SOHO/{year}_CELIAS_Proton_Monitor_5min.zip'
+                with zipfile.ZipFile(file, 'r') as archive:
+                    with archive.open(f'{year}_CELIAS_Proton_Monitor_5min.txt') as txt:
+                        lines = txt.readlines()
+                        for line in lines[29:]:
+                            data = line.split()[:-7] #ignores the position of SOHO
+                            data = [item.decode('utf-8') for item in data]
+                            csv_writer.writerow(data)
+                os.remove(file)
+                
+            csv_content = output_buffer.getvalue()
 
-            dataset.close()
+            output_buffer.close()
+            with open(csv_root, "w", newline="") as csv_file:
+                csv_file.write(csv_content)        
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_root)
+        df[['DOY', 'HH', 'MM', 'SS']] = df['DOY:HH:MM:SS'].str.split(':', expand=True)
 
-            important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
-
-            magnetometer = df[important_variables]
-
-            magnetometer.to_csv(f'data/DSCOVR_L2/magnetometer/{filename[:-6]}.csv')
-            
-            os.remove(output_file)
-        else:
-            dataset = xr.open_dataset(output_file)
-
-            df = dataset.to_dataframe()
-
-            dataset.close()
-
-            important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
-
-            magnetometer = df[important_variables]
-
-            magnetometer = magnetometer.resample('1min').mean()
-
-            magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{filename[:-6]}.csv')
-            os.remove(output_file)
-
-    start_time =scrap_date[0]
-    end_time = scrap_date[-1]
-
-    level_1, level_2 = from_csv(start_time, end_time, sep)
-
-    dst, kp = import_targets(scrap_date)
-
-    return level_1, level_2,dst, kp
-
-def from_csv(start_time, end_time, sep = False):
-    fc1_list = []
-    for file in os.listdir('data/DSCOVR_L1/faraday'):
-        file = os.path.join('data/DSCOVR_L1/faraday', file)
-        data = pd.read_csv(file, index_col=0)
-        fc1_list.append(data)
+        df['datetime'] = pd.to_datetime(
+            '20' + df['YY'].apply(str) + df['MON'] + df['DY'].apply(str) + ' ' +
+            df['DOY'] + ' ' + df['HH'] + ':' +
+            df['MM'] + ':' + df['SS'],
+            format='%Y%b%d %j %H:%M:%S')
+        df.set_index(df['datetime']).drop(['YY', 'MON', 'DY', 'DOY', 'DOY:HH:MM:SS', 'HH', 'MM', 'SS', 'datetime'], axis =1)
+        return df
     
-    mg1_list = []
-    for file in os.listdir('data/DSCOVR_L1/magnetometer'):
-        file = os.path.join('data/DSCOVR_L1/magnetometer', file)
-        data = pd.read_csv(file, index_col=0)
-        mg1_list.append(data)
-    
-    f1m_list = []
-    for file in os.listdir('data/DSCOVR_L2/faraday'):
-        file = os.path.join('data/DSCOVR_L2/faraday', file)
-        data = pd.read_csv(file, index_col=0)
-        f1m_list.append(data)
-    
-    m1m_list = []
-    for file in os.listdir('data/DSCOVR_L2/magnetometer'):
-        file = os.path.join('data/DSCOVR_L2/magnetometer', file)
-        data = pd.read_csv(file, index_col=0)
-        m1m_list.append(data)
+    """LASCO"""
+    """
+    LASCO is designed to observe the solar corona by creating artificial 
+    eclipses. It can help detect and track the expansion of coronal mass ejections (CMEs), which, 
+    as mentioned earlier, can lead to geomagnetic storms when they reach Earth.
+    """
+    def LASCO(self, scrap_date):
+        ...
 
-    fc1 = pd.concat(fc1_list)
-    mg1 = pd.concat(mg1_list)
-    f1m = pd.concat(f1m_list)
-    m1m = pd.concat(m1m_list)
-    fc1 = fc1[~fc1.index.duplicated(keep='first')]
-    mg1 = mg1[~mg1.index.duplicated(keep='first')]
-    f1m = f1m[~f1m.index.duplicated(keep='first')]
-    m1m = m1m[~m1m.index.duplicated(keep='first')]
-    fc1.index = pd.to_datetime(fc1.index)
-    mg1.index = pd.to_datetime(mg1.index)
-    f1m.index = pd.to_datetime(f1m.index)
-    m1m.index = pd.to_datetime(m1m.index)
-    start_time_ = f'{start_time[:4]}-{start_time[4:6]}-{start_time[-2:]} 00:00:00'
-    end_time_ = f'{end_time[:4]}-{end_time[4:6]}-{end_time[-2:]} 23:59:00' 
-    freq = '1T'
-    full_time_index = pd.date_range(start=start_time_, end=end_time_, freq=freq)
-    fc1 = fc1.reindex(full_time_index).interpolate(method = 'linear')
-    mg1 = mg1.reindex(full_time_index).interpolate(method = 'linear')
-    f1m = f1m.reindex(full_time_index).interpolate(method = 'linear')
-    m1m = m1m.reindex(full_time_index).interpolate(method = 'linear')
-    if sep:
-        level_1 = (fc1, mg1)
-        level_2 = (f1m, m1m)
-    else:
-        level_1 = pd.concat([fc1, mg1], axis =1)
-        level_2 = pd.concat([f1m, m1m], axis =1)
-        
-        level_1.index = pd.to_datetime(level_1.index)
-        level_2.index = pd.to_datetime(level_2.index)
-    
-    return level_1, level_2
+def interval_years(start_date_str, end_date_str):
+    start_date = datetime.strptime(start_date_str, "%Y%m%d")
+    end_date = datetime.strptime(end_date_str, "%Y%m%d")
 
-def gzip_to_nc():
-    #defining raw data dataframes
-    fc1 = []
-    mg1 = []
-    f1m = []
-    m1m = []
+    current_date = start_date
+    year_list = []
 
-    ##uncompress and save
-    for file in os.listdir('data/compressed'):
-        output_file = os.path.join('data/uncompressed/',file[:-3]) 
-        file = os.path.join('data/compressed/',file)
-        if output_file in os.listdir('data/uncompressed'):
-            continue
-        if 'fc1' in file:
-            fc1.append(output_file)
-        elif 'f1m' in file:
-            f1m.append(output_file)
-        elif 'm1m' in file:
-            m1m.append(output_file)
-        else:
-            mg1.append(output_file)
-        with gzip.open(file, 'rb') as compressed_file:
-            with open(output_file, 'wb') as decompressed_file:
-                decompressed_file.write(compressed_file.read())
-    return fc1, mg1, f1m, m1m
+    while current_date <= end_date:
+        year_list.append(str(current_date.year))  # Append the year part of the date
+        current_date += timedelta(days=365)  # Increment by one year (365 days)
 
-def l1_faraday_preprocess(dataframes):
-    
-    data_list = []
-    
-    #cleaning data
-
-    for nc_file in dataframes: 
-
-        dataset = xr.open_dataset(nc_file)
-
-        df = dataset.to_dataframe()
-
-        important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
-
-        faraday_cup = df[important_variables]
-
-        faraday_cup = faraday_cup.resample('1min').mean()
-
-        faraday_cup.to_csv(f'data/DSCOVR_L1/faraday/{nc_file[-3]}.csv')
-
-        data_list.append(faraday_cup)
-    return pd.concat(data_list)
-
-def l1_magnet_preprocess(dataframes):
-    
-    data_list = []
-
-    for nc_file in dataframes:
-        dataset = xr.open_dataset(nc_file)
-
-        df = dataset.to_dataframe()
-
-        important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
-
-        magnetometer = df[important_variables]
-
-        magnetometer = magnetometer.resample('1min').mean()
-
-        magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{nc_file[-3]}.csv')
-        data_list.append(magnetometer)
-    return pd.concat(data_list)
-
-def l2_faraday_preprocess(dataframes):
-    
-    data_list = []
-    
-    #cleaning data
-
-    for nc_file in dataframes: 
-
-        dataset = xr.open_dataset(nc_file)
-
-        df = dataset.to_dataframe()
-
-        important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
-
-        faraday_cup = df[important_variables]
-        faraday_cup.to_csv(f'data/DSCOVR_L2/faraday/{nc_file[-3]}.csv')
-        data_list.append(faraday_cup)
-    return pd.concat(data_list)
-
-def l2_magnet_preprocess(dataframes):
-    
-    data_list = []
-
-    for nc_file in dataframes:
-        dataset = xr.open_dataset(nc_file)
-
-        df = dataset.to_dataframe()
-
-        important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
-
-        magnetometer = df[important_variables]
-
-        magnetometer.to_csv(f'data/DSCOVR_L2/magnetometer/{nc_file[-3]}.csv')
-        
-        data_list.append(magnetometer)
-    return pd.concat(data_list)
-
-def preprocessing():
-    fc1, mg1, f1m, m1m = gzip_to_nc()
-    l1_faraday = l1_faraday_preprocess(fc1)
-    l1_magnetometer = l1_magnet_preprocess(mg1)
-    l2_faraday = l2_faraday_preprocess(f1m)
-    l2_magnetometer = l2_magnet_preprocess(m1m)
-    return pd.concat([l1_faraday, l1_magnetometer], axis =1), pd.concat([l2_faraday, l2_magnetometer], axis =1)
+    return year_list
 
 def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
     os.makedirs('data/Dst_index', exist_ok = True)
@@ -323,20 +170,6 @@ def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
         else:
             print('Unable to access the site')
 
-
-def interval_time(start_date_str, end_date_str):
-    start_date = datetime.strptime(start_date_str, "%Y%m%d")
-    end_date = datetime.strptime(end_date_str, "%Y%m%d")
-
-    current_date = start_date
-    date_list = []
-
-    while current_date <= end_date:
-        date_list.append(current_date.strftime("%Y%m%d"))
-        current_date += timedelta(days=1)
-
-    return date_list
-#format: month: YYYYMM day: D for < 10 and DD for > 10.
 
 def day_Dst(interval_time):
     data_list = []
