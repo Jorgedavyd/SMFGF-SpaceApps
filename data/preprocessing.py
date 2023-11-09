@@ -26,7 +26,7 @@ class SOHO:
     be associated with solar flares and CMEs, which can, in turn, 
     influence geomagnetic activity.
     """
-    def SEM(self, scrap_date):
+    def CELIAS_SEM(self, scrap_date):
         #getting dates
         csv_root = 'data/SOHO/SEM.csv' #define the root
         years = list(set([date[:4] for date in scrap_date]))
@@ -72,7 +72,7 @@ class SOHO:
     
     """CELIAS PROTON MONITOR"""
     """It has YY,MON,DY,DOY:HH:MM:SS,SPEED,Np,Vth,N/S,V_He"""
-    def CELIAS_Proton_Monitor_data(self, scrap_date):
+    def CELIAS_Proton_Monitor(self, scrap_date):
         #getting dates
         csv_root = 'data/SOHO/CELIAS_proton.csv' #define the root
         years = list(set([date[:4] for date in scrap_date]))
@@ -123,7 +123,11 @@ class SOHO:
             format='%Y%b%d %j %H:%M:%S')
         df.set_index(df['datetime']).drop(['YY', 'MON', 'DY', 'DOY', 'DOY:HH:MM:SS', 'HH', 'MM', 'SS', 'datetime'], axis =1)
         return df
-    
+    def CELIAS(self, scrap_date):
+        proton_monitor = self.CELIAS_Proton_Monitor(scrap_date)
+        sem = self.CELIAS_SEM(scrap_date)
+        df = pd.concat([proton_monitor, sem], axis = 1)
+        return df
     """LASCO"""
     """
     LASCO is designed to observe the solar corona by creating artificial 
@@ -132,6 +136,26 @@ class SOHO:
     """
     def LASCO(self, scrap_date):
         ...
+    def UVCS(self, scrap_date):
+        ...
+    def ERNE(self, scrap_date):
+        ...
+    def EIT(self, scrap_date):
+        ...
+    def SUMER(self, scrap_date):
+        ...
+    def COSTEP(self, scrap_date):
+        ...
+    def all(self, scrap_date):
+        lasco = self.LASCO() #imagenes
+        uvcs = self.UVCS()
+        eit = self.EIT() #imagenes
+        sumer = self.SUMER()#imagenes creo
+        costep = self.COSTEP()
+        celias = self.CELIAS()
+        df = pd.concat([lasco, uvcs, eit, sumer, costep, celias], axis = 1)
+        return df
+
 
 def interval_years(start_date_str, end_date_str):
     start_date = datetime.strptime(start_date_str, "%Y%m%d")
