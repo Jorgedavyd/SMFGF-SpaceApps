@@ -13,7 +13,8 @@ import io
 import csv
 import zipfile
 import tarfile
-
+from urllib.request import urlopen
+import glob
 class SOHO:
     def __init__(self):
         pass
@@ -135,29 +136,43 @@ class SOHO:
     as mentioned earlier, can lead to geomagnetic storms when they reach Earth.
     """
     def LASCO(self, scrap_date):
-        ...
+        c2 = self.LASCO_cn(scrap_date, 'c2')
+        c3 = self.LASCO_cn(scrap_date, 'c3')
+        c4 = self.LASCO_cn(scrap_date, 'c4')
+        return c2, c3, c4
+    def download_LASCO_cn(self, scrap_date, mode): ## REMEMBER FORMAT %y%m%d ##modes c1,c2,c3
+        dirctry = 'data/SOHO/LASCO/' + mode
+        os.makedirs(dirctry, exist_ok = True)
+        scrap_date = update_scrap_date(scrap_date, dirctry)
+        for date in scrap_date:
+            url = f"https://lasco-www.nrl.navy.mil/lz/level_05/{date}/{mode}/"
+
+            # Open the URL and read the page content
+            page = urlopen(url)
+            html_content = page.read().decode('utf-8')
+
+            # Parse the HTML content with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+            for k, name in enumerate([i.text for i in soup.find_all('a')[6:-1] if '.fts' not in i.text]):
+                download_url(url+name, dirctry, date + '_' + str(k) + '.jpg')
     def UVCS(self, scrap_date):
-        ...
-    def ERNE(self, scrap_date):
         ...
     def EIT(self, scrap_date):
         ...
-    def SUMER(self, scrap_date):
-        ...
     def COSTEP(self, scrap_date):
         ...
-    def all(self, scrap_date):
-        lasco = self.LASCO() #imagenes
-        uvcs = self.UVCS()
-        eit = self.EIT() #imagenes
-        sumer = self.SUMER()#imagenes creo
-        costep = self.COSTEP()
-        celias = self.CELIAS()
-        df = pd.concat([lasco, uvcs, eit, sumer, costep, celias], axis = 1)
-        return df
 
 
-def interval_years(start_date_str, end_date_str):
+def update_scrap_date(scrap_date, root): #ALWAYS USING THE SAME SCALE
+    files = os.listdir(root)
+    for idx, day in enumerate(scrap_date):
+        for file in files:
+            if day in file:
+                del scrap_date[idx]
+    return scrap_date
+
+
+def interval_year(start_date_str, end_date_str):
     start_date = datetime.strptime(start_date_str, "%Y%m%d")
     end_date = datetime.strptime(end_date_str, "%Y%m%d")
 
@@ -169,6 +184,21 @@ def interval_years(start_date_str, end_date_str):
         current_date += timedelta(days=365)  # Increment by one year (365 days)
 
     return year_list
+
+def interval_time(start_date_str, end_date_str, mode = '%Y%m%d'):
+    start_date = datetime.strptime(start_date_str, mode)
+    end_date = datetime.strptime(end_date_str, mode)
+
+    current_date = start_date
+    date_list = []
+
+    while current_date <= end_date:
+        date_list.append(current_date.strftime(mode))
+        current_date += timedelta(days=1)
+    return date_list
+
+
+
 
 def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
     os.makedirs('data/Dst_index', exist_ok = True)
