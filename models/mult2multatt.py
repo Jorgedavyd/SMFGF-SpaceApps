@@ -99,7 +99,7 @@ class SingleHead2MultiHead(GeoBase):
     def training_step(self, batch, weights:list, encoder_forcing):
         self.encoder_forcing = encoder_forcing
         if encoder_forcing:
-            if isinstance(self, ResidualMultiheadAttentionLSTM):
+            if isinstance(self, Sing2MultiheadAttentionLSTM):
                 #instantiate loss
                 loss = 0
                 alpha_encoder, alpha_out, alpha_main = weights
@@ -118,7 +118,7 @@ class SingleHead2MultiHead(GeoBase):
                 out_L1 = out_L1[:, -1, :]
                 out_L1 = self.fc(out_L1)
                 loss += F.mse_loss(out_L1, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out_L1, target.squeeze(1).to(torch.long))*alpha_main
-            elif isinstance(self, ResidualMultiheadAttentionGRU):
+            elif isinstance(self, Sing2MultiheadAttentionGRU):
                 #instantiate loss
                 loss = 0
                 alpha_encoder, alpha_out, alpha_main = weights
@@ -187,15 +187,18 @@ class ResidualMultiheadAttentionLSTM(nn.Module):
         if cn is None:
             cn = torch.zeros(self.num_layers * (2 if self.bidirectional else 1), batch_size, self.hidden_size, requires_grad=True, device = 'cuda')
         for layer_idx in range(self.num_layers):
-            attn_out, _ = self.attention_layers[layer_idx](x, x, x)
-            attn_out = self.attention_norm[layer_idx](attn_out)
-            lstm_out, (hn, cn) = self.lstm_layers[layer_idx](attn_out)
-            if layer_idx>0:               
-                x = lstm_out + x
+            if layer_idx>0:
+                attn_out, _ = self.attention_layers[layer_idx](input_layer)
             else:
-                x = lstm_out
+                attn_out, _ = self.attention_layers[layer_idx](x, x, x)
+            out = self.attention_norm[layer_idx](attn_out)
+            out, (hn, cn) = self.lstm_layers[layer_idx](out, hn, cn)
+            if layer_idx>0:               
+                input_layer = out + x
+            else:
+                input_layer = out
             
-        return x, (hn, cn)
+        return input_layer, (hn, cn)
 
 class MultiHeaded2MultiheadAttentionLSTM(MultiHead2MultiHeadBase):
     def __init__(self, encoder_fc, encoder_mg, decoder, num_heads: list, architecture, task = 'regression'):
