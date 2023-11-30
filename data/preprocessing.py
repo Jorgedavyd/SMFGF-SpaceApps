@@ -29,45 +29,35 @@ class SOHO:
     """
     def CELIAS_SEM(self, scrap_date):
         #getting dates
+        main_root = 'data\SOHO_L2\CELIAS_SEM_15sec_avg'
         csv_root = 'data/SOHO/SEM.csv' #define the root
-        years = list(set([date[:4] for date in scrap_date]))
-        try:
-            #getting the csv
-            root = 'data/SOHO/'
-            os.makedirs(root)
-            name = 'CELIAS_Proton_Monitor_5min.tar.gz'
-            url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_Proton_Monitor_5min.tar.gz'
-            download_url(url, root, name)
-            with tarfile.open(os.path.join(root, name), 'r') as tar:
-                tar.extractall(root)
-            
-            # Create a CSV output buffer
-            output_buffer = io.StringIO()
-            csv_writer = csv.writer(output_buffer)
+        years = list(set([date[:4] for date in scrap_date])) ##YYYMMDD
+        # Create a CSV output buffer
+        output_buffer = io.StringIO()
+        csv_writer = csv.writer(output_buffer)
 
-            # Write the CSV header
-            csv_header = [
-                "YY", "MON", "DY", "DOY:HH:MM:SS", "SPEED", "Np", "Vth", "N/S", "V_He"
-                ]
-            csv_writer.writerow(csv_header)
-            for year in years:
-                file = f'data/SOHO/{year}_CELIAS_Proton_Monitor_5min.zip'
-                with zipfile.ZipFile(file, 'r') as archive:
-                    with archive.open(f'{year}_CELIAS_Proton_Monitor_5min.txt') as txt:
-                        lines = txt.readlines()
-                        for line in lines[29:]:
-                            data = line.split()[:-7] #ignores the position of SOHO
-                            data = [item.decode('utf-8') for item in data]
-                            csv_writer.writerow(data)
-                os.remove(file)
+        # Write the CSV header
+        csv_header = [
+            "Julian", "F_Flux", "C_Flux"
+            ] #We will use astropy to 
+        csv_writer.writerow(csv_header)
+        for year in years:
+            file = os.path.join(main_root, year)
+            with zipfile.ZipFile(file, 'r') as archive:
+                with archive.open(os.path.join(main_root, f'{year}_CELIAS_Proton_Monitor_5min.txt')) as txt:
+                    lines = txt.readlines()
+                    for line in lines[46:]:
+                        data = line.split()[0] + line.split()[-2:] #takes just julian time and flux 
+                        data = [item.decode('utf-8') for item in data]
+                        csv_writer.writerow(data)
+                    os.remove(txt)
+            os.remove(file)
 
-            csv_content = output_buffer.getvalue()
+        csv_content = output_buffer.getvalue()
 
-            output_buffer.close()
-            with open(csv_root, "w", newline="") as csv_file:
-                csv_file.write(csv_content)        
-        except FileExistsError:
-            pass
+        output_buffer.close()
+        with open(csv_root, "w", newline="") as csv_file:
+            csv_file.write(csv_content)        
         celias_proton_monitor = pd.read_csv(csv_root)
         return celias_proton_monitor
     
