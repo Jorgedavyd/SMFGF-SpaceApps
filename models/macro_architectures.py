@@ -82,7 +82,7 @@ class Sing2Sing(GeoBase):
         else:
             l1_data, target = batch
             out= self(l1_data)
-            loss = F.mse_loss(out, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out, target)*alpha_main
+            loss = F.mse_loss(out, target) if self.task_type == 'regression' else F.cross_entropy(out, target)
         return loss
 
     def validation_step(self, batch):
@@ -133,7 +133,7 @@ class Mult2Sing(GeoBase):
         else:
             fc1, mg1, target = batch
             out = self(fc1, mg1)
-            loss = F.mse_loss(out, target)*alpha_main if self.task_type == 'regression' else F.cross_entropy(out, target)*alpha_main
+            loss = F.mse_loss(out, target) if self.task_type == 'regression' else F.cross_entropy(out, target)
         return loss
 
     def validation_step(self, batch):
