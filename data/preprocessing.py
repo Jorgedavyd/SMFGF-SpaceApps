@@ -1,20 +1,24 @@
 from torchvision.datasets.utils import download_url
 from datetime import datetime, timedelta,date
-import xarray as xr
 import pandas as pd
 import os
-import gzip
 import requests
 from bs4 import BeautifulSoup
 from datetime import date
 import pandas as pd
 import numpy as np
-import io 
 import csv
 import zipfile
 import tarfile
 from urllib.request import urlopen
 import glob
+from astropy.time import Time
+from sunpy.net import Fido, attrs as a
+import astropy.units as u
+import shutil
+
+
+            
 class SOHO:
     def __init__(self):
         pass
@@ -27,131 +31,157 @@ class SOHO:
     be associated with solar flares and CMEs, which can, in turn, 
     influence geomagnetic activity.
     """
+
     def CELIAS_SEM(self, scrap_date):
-        #getting dates
-        main_root = 'data\SOHO_L2\CELIAS_SEM_15sec_avg'
-        csv_root = 'data/SOHO/SEM.csv' #define the root
-        years = list(set([date[:4] for date in scrap_date])) ##YYYMMDD
-        # Create a CSV output buffer
-        output_buffer = io.StringIO()
-        csv_writer = csv.writer(output_buffer)
+        years = set(date[:4] for date in scrap_date)
+        root = 'data/SOHO_L2/CELIAS_SEM_15sec_avg'
+        csv_root = os.path.join(root, 'data.csv')
 
-        # Write the CSV header
-        csv_header = [
-            "Julian", "F_Flux", "C_Flux"
-            ] #We will use astropy to 
-        csv_writer.writerow(csv_header)
-        for year in years:
-            file = os.path.join(main_root, year)
-            with zipfile.ZipFile(file, 'r') as archive:
-                with archive.open(os.path.join(main_root, f'{year}_CELIAS_Proton_Monitor_5min.txt')) as txt:
-                    lines = txt.readlines()
-                    for line in lines[46:]:
-                        data = line.split()[0] + line.split()[-2:] #takes just julian time and flux 
-                        data = [item.decode('utf-8') for item in data]
-                        csv_writer.writerow(data)
-                    os.remove(txt)
-            os.remove(file)
+        try:
+            url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_SEM_15sec_avg.tar.gz'
+            name = 'CELIAS_SEM_15sec_avg.tar.gz'
+            os.makedirs(root, exist_ok=True)
+            if 'data.csv' in os.listdir(root):
+                raise FileExistsError
+            download_url(url, root, name)
+            
+            with tarfile.open(os.path.join(root, name), 'r') as tar:
+                tar.extractall(root)
+            
+            with open(csv_root, 'w') as csv_file:
+                csv_file.write("Julian,F_Flux,C_Flux\n")
 
-        csv_content = output_buffer.getvalue()
+            for year in years:
+                data_rows = []  
+                year_folder = os.path.join(root, year)
+                for day in sorted(os.listdir(year_folder)):
+                    file_path = os.path.join(year_folder, day)
+                    with open(file_path, 'r') as txt:
+                        lines = txt.readlines()[46:]  # Skip first 46 lines
+                        for line in lines:
+                            data = [line.split()[0]] + line.split()[-2:] #julian,flux
+                            data_rows.append(data)
+                
+                with open(csv_root, 'a') as csv_file:
+                    csv_writer = csv.writer(csv_file)
+                    for row in data_rows:
+                        csv_writer.writerow(row)
 
-        output_buffer.close()
-        with open(csv_root, "w", newline="") as csv_file:
-            csv_file.write(csv_content)        
-        celias_proton_monitor = pd.read_csv(csv_root)
-        return celias_proton_monitor
+                shutil.rmtree(year_folder)
+            
+            celias_sem = pd.read_csv(csv_root)
+            celias_sem['datetime'] = pd.to_datetime(celias_sem['Julian'], unit='D', origin = 'julian')
+            celias_sem.set_index('datetime', drop=True,inplace=True)
+            celias_sem.drop('Julian', axis = 1, inplace = True)
+            celias_resample = celias_sem.resample('5T').mean()
+            celias_resample.to_csv(csv_root)
+        except FileExistsError:
+            pass
+
+        celias_sem = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime')
+        return celias_sem
     
     """CELIAS PROTON MONITOR"""
     """It has YY,MON,DY,DOY:HH:MM:SS,SPEED,Np,Vth,N/S,V_He"""
     def CELIAS_Proton_Monitor(self, scrap_date):
-        #getting dates
-        csv_root = 'data/SOHO/CELIAS_proton.csv' #define the root
-        years = list(set([date[:4] for date in scrap_date]))
+        csv_root = 'data/SOHO_L2/CELIAS_Proton_Monitor_5min/data.csv'
+        years = set(date[:4] for date in scrap_date)
+        month_map = {
+            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+            'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+            'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+        }
+        
         try:
-            #getting the csv
-            root = 'data/SOHO/'
-            os.makedirs(root)
+            root = 'data/SOHO_L2/CELIAS_Proton_Monitor_5min'
             name = 'CELIAS_Proton_Monitor_5min.tar.gz'
             url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_Proton_Monitor_5min.tar.gz'
+            os.makedirs(root, exist_ok=True)
+            if 'data.csv' in os.listdir(root):
+                raise FileExistsError
+            download_url(url, root, name)
+            
+            with tarfile.open(os.path.join(root, name), 'r') as tar:
+                tar.extractall(root)
+
+            with open(csv_root, 'w') as csv_file:
+                csv_file.write("datetime,SPEED,Np,Vth,N/S,V_He\n")
+
+            for year in years:
+                data_rows = []
+                filename = f'{year}_CELIAS_Proton_Monitor_5min'
+                file_path = os.path.join(root, filename + '.zip')
+                with zipfile.ZipFile(file_path, 'r') as archive:
+                    with archive.open(filename+'.txt') as txt:
+                        lines = txt.readlines() ####
+                        for line in lines[29:]:
+                            vector = [item.decode('utf-8') for item in line.split()]
+                            data = [vector[0]+'-'+month_map[vector[1]]+'-'+vector[2]+' '+':'.join(vector[3].split(':')[1:])] + vector[4:-7] #ignores the position of SOHO
+                            data_rows.append(data)
+                with open(csv_root, 'a') as csv_file:
+                    csv_writer = csv.writer(csv_file)
+                    for row in data_rows:
+                        csv_writer.writerow(row)
+
+                os.remove(file_path)
+            
+        except FileExistsError:
+            pass
+
+        df = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime', date_format='%y-%m-%d %H:%M:%S').resample('5T').mean()
+
+        return df
+    
+    def COSTEP_EPHIN(self, scrap_date):
+        #getting dates
+        years = list(set([date[:4] for date in scrap_date])) ##YYYMMDD
+        root = './data/SOHO_L2/COSTEP_EPHIN_5min'
+        csv_root = os.path.join(root, 'data.csv')
+        try:
+            url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/COSTEP_EPHIN_L3_l3i_5min-EntireMission-ByYear.tar.gz'
+            name = 'COSTEP_EPHIN_L3_l3i_5min-EntireMission-ByYear.tar.gz'
+            os.makedirs(root, exist_ok=True)
+            if 'data.csv' in os.listdir(root):
+                raise FileExistsError
             download_url(url, root, name)
             with tarfile.open(os.path.join(root, name), 'r') as tar:
                 tar.extractall(root)
             
-            # Create a CSV output buffer
-            output_buffer = io.StringIO()
-            csv_writer = csv.writer(output_buffer)
+            columns = [
+                'year', 'month', 'day', 'hour', 'minute',
+                'int_p4', 'int_p8', 'int_p25', 'int_p41',
+                'int_h4', 'int_h8', 'int_h25', 'int_h41'
+            ]
 
-            # Write the CSV header
-            csv_header = [
-                "YY", "MON", "DY", "DOY:HH:MM:SS", "SPEED", "Np", "Vth", "N/S", "V_He"
-                ]
-            csv_writer.writerow(csv_header)
-            for year in years:
-                file = f'data/SOHO/{year}_CELIAS_Proton_Monitor_5min.zip'
-                with zipfile.ZipFile(file, 'r') as archive:
-                    with archive.open(f'{year}_CELIAS_Proton_Monitor_5min.txt') as txt:
-                        lines = txt.readlines()
-                        for line in lines[29:]:
-                            data = line.split()[:-7] #ignores the position of SOHO
-                            data = [item.decode('utf-8') for item in data]
-                            csv_writer.writerow(data)
-                os.remove(file)
-                
-            csv_content = output_buffer.getvalue()
+            with open(csv_root, 'w') as csv_file:
+                csv_file.writelines(','.join(columns) + '\n')
 
-            output_buffer.close()
-            with open(csv_root, "w", newline="") as csv_file:
-                csv_file.write(csv_content)        
+            for year in set([date[:4] for date in scrap_date]):
+                data_rows = []
+                filename =os.path.join(root, '5min', f'{year}.l3i')
+                with open(filename, 'r') as txt:
+                    lines = txt.readlines()
+                    for line in lines[3:]:
+                        data = line.split()[:3] + line.split()[4:6] + line.split()[8:12] + line.split()[20:24]
+                        data = [item for item in data]
+                        data_rows.append(data)
+                with open(csv_root, 'a') as csv_file:
+                    csv_writer = csv.writer(csv_file)
+                    for row in data_rows:
+                        csv_writer.writerow(row)
+                os.remove(filename)
+            shutil.rmtree(os.path.join(root, '5min'))
+
+            df = pd.read_csv(csv_root)
+            df['datetime'] = pd.to_datetime(df[['year', 'month', 'day', 'hour', 'minute']])
+            df = df.drop(['year', 'month', 'day', 'hour', 'minute'], axis=1)  
+            df.set_index('datetime', inplace=True, drop = True)
+            df.to_csv(csv_root)
         except FileExistsError:
             pass
-        df = pd.read_csv(csv_root)
-        df[['DOY', 'HH', 'MM', 'SS']] = df['DOY:HH:MM:SS'].str.split(':', expand=True)
-
-        df['datetime'] = pd.to_datetime(
-            '20' + df['YY'].apply(str) + df['MON'] + df['DY'].apply(str) + ' ' +
-            df['DOY'] + ' ' + df['HH'] + ':' +
-            df['MM'] + ':' + df['SS'],
-            format='%Y%b%d %j %H:%M:%S')
-        df.set_index(df['datetime']).drop(['YY', 'MON', 'DY', 'DOY', 'DOY:HH:MM:SS', 'HH', 'MM', 'SS', 'datetime'], axis =1)
-        return df
-    def CELIAS(self, scrap_date):
-        proton_monitor = self.CELIAS_Proton_Monitor(scrap_date)
-        sem = self.CELIAS_SEM(scrap_date)
-        df = pd.concat([proton_monitor, sem], axis = 1)
-        return df
-    """LASCO"""
-    """
-    LASCO is designed to observe the solar corona by creating artificial 
-    eclipses. It can help detect and track the expansion of coronal mass ejections (CMEs), which, 
-    as mentioned earlier, can lead to geomagnetic storms when they reach Earth.
-    """
-    def LASCO(self, scrap_date):
-        c2 = self.LASCO_cn(scrap_date, 'c2')
-        c3 = self.LASCO_cn(scrap_date, 'c3')
-        c4 = self.LASCO_cn(scrap_date, 'c4')
-        return c2, c3, c4
-    def download_LASCO_cn(self, scrap_date, mode): ## REMEMBER FORMAT %y%m%d ##modes c1,c2,c3
-        dirctry = 'data/SOHO/LASCO/' + mode
-        os.makedirs(dirctry, exist_ok = True)
-        scrap_date = update_scrap_date(scrap_date, dirctry)
-        for date in scrap_date:
-            url = f"https://lasco-www.nrl.navy.mil/lz/level_05/{date}/{mode}/"
-
-            # Open the URL and read the page content
-            page = urlopen(url)
-            html_content = page.read().decode('utf-8')
-
-            # Parse the HTML content with BeautifulSoup
-            soup = BeautifulSoup(html_content, 'html.parser')
-            for k, name in enumerate([i.text for i in soup.find_all('a')[6:-1] if '.fts' not in i.text]):
-                download_url(url+name, dirctry, date + '_' + str(k) + '.jpg')
-    def UVCS(self, scrap_date):
-        ...
-    def EIT(self, scrap_date):
-        ...
-    def COSTEP(self, scrap_date):
-        ...
-
+        costep_ephin = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime', date_format='%Y-%m-%d %H:%M:%S').resample('5T').mean()
+        return costep_ephin
+    
 
 def update_scrap_date(scrap_date, root): #ALWAYS USING THE SAME SCALE
     files = os.listdir(root)
@@ -229,6 +259,7 @@ def day_Dst(interval_time):
     series = pd.concat(data_list, axis = 0).reset_index(drop=True)
     series.name = 'Dst'
     return series
+
 def day_Kp(interval_time):
     data_list = []
     kp = pd.read_csv(f'data/Kp_index/data.csv',index_col = 0, header = None).T
