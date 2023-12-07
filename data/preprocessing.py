@@ -66,7 +66,7 @@ def automated_preprocessing(scrap_date: list, sep = False):
 
             dataset.close()
 
-            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
+            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_speed', 'proton_density', 'proton_temperature']
 
             faraday_cup = df[important_variables]
 
@@ -83,9 +83,10 @@ def automated_preprocessing(scrap_date: list, sep = False):
 
             dataset.close()
 
-            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
+            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_speed', 'proton_density', 'proton_temperature']
 
             faraday_cup = df[important_variables]
+            ##Feature engineering
 
             faraday_cup.to_csv(f'data/DSCOVR_L2/faraday/{filename[:-6]}.csv')
             
@@ -97,7 +98,7 @@ def automated_preprocessing(scrap_date: list, sep = False):
 
             dataset.close()
 
-            important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
+            important_variables = ['bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse']
 
             magnetometer = df[important_variables]
 
@@ -111,7 +112,7 @@ def automated_preprocessing(scrap_date: list, sep = False):
 
             dataset.close()
 
-            important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
+            important_variables = ['bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse']
 
             magnetometer = df[important_variables]
 
