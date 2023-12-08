@@ -1,4 +1,4 @@
-from torchvision.datasets.utils import download_url
+from torchvision.datasets.utils import download_url, download_file_from_google_drive
 from datetime import datetime, timedelta,date
 import pandas as pd
 import os
@@ -17,6 +17,7 @@ from sunpy.net import Fido, attrs as a
 import astropy.units as u
 import shutil
 import spacepy.pycdf as pycdf
+from math import sqrt
 
 def SIS_version(date, mode = '%Y%m%d'):
     date = datetime.strptime(date, mode)
@@ -73,178 +74,240 @@ def SWEPAM_version(date, mode = '%Y%m%d'):
         return 'v11'
 
     
+def MAG_preprocessing():
+    root = './data/ACE/MAG'
+    csv_file = os.path.join(root, 'data.csv')
+    with open(csv_file, 'w') as csvfile:
+        csvfile.writelines('year,day,hr,min,sec,Bgse_x,Bgse_y,Bgse_z,pos_gse_x,pos_gse_y,pos_gse_z\n')
+    for file in os.listdir(root):
+        data_rows = []
+        with open(os.path.join(root, file), 'r') as txt:
+            lines = txt.readlines()
+            for line in lines[44:]:
+                data = line.split()
+                data_rows.append(data)
+        with open(csv_file, 'a') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            for row in data_rows:
+                csv_writer.writerow(row)
+    df = pd.read_csv(csv_file)
+    # Convert year and day of year to a full date
+    df['date'] = pd.to_datetime(df['year'].astype(str) + df['day'].astype(str), format='%Y%j')
+    df['month'] = df['date'].dt.month
+    df['day'] = df['date'].dt.day
+    df['datetime'] = pd.to_datetime(df[['year','month', 'day', 'hr', 'min', 'sec']])
+    df.drop(['year','month', 'day', 'hr', 'min', 'sec'], axis=1, inplace=True)
+    df.set_index('datetime', drop = True, inplace = True)
+    print(df)
+    df = df.resample('5T').mean()
+    #feature engineering
+    df['Bgse_norm'] = df.apply(lambda row: sqrt(row['Bgse_x']**2+row['Bgse_y']**2+row['Bgse_z']**2))
+    return df
+
+
+
+
+
 ## https://cdaweb.gsfc.nasa.gov/cgi-bin/eval1.cgi
 class ACE:
     def __init__(self):
         pass
     def SIS(self, scrap_date):
-        csv_file = './data/ACE/SIS/data.csv' #directories
-        temp_root = './data/ACE/SIS/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            version = SIS_version(date)
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/sis/level_2_cdaweb/sis_h1/{date[:4]}/ac_h1_sis_{date}_{version}.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
+        try:
+            csv_file = './data/ACE/SIS/data.csv' #directories
+            temp_root = './data/ACE/SIS/temp' 
+            os.makedirs(temp_root) #create folder
+            ion_composition = [
+                'flux_He', 'flux_C', 'flux_N', 'flux_O', 'flux_Ne', 'flux_Mg',
+                'flux_Si', 'flux_S', 'flux_Ar', 'flux_Ca', 'flux_Fe',
+                'flux_Ni', 'cnt_He', 'cnt_C', 'cnt_N', 'cnt_O', 'cnt_Ne',
+                'cnt_Mg', 'cnt_Si', 'cnt_S', 'cnt_Ar', 'cnt_Ca',
+                'cnt_Fe', 'cnt_Ni'
+            ]
+            variables = ['Epoch'] + [f'{name}_{i}' for name in ion_composition for i in range(1,9)]
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                version = SIS_version(date)
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/sis/level_2_cdaweb/sis_h1/{date[:4]}/ac_h1_sis_{date}_{version}.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
 
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
+                data_columns = []
 
-                csv_writer.writerow(variables)
+                for var in ion_composition:
+                    data_columns.append(cdf_file[var][:])
 
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
         df = pd.read_csv(csv_file, index_col = 'Epoch')
         return df
     def MAG(self, scrap_date):
-        csv_file = './data/ACE/MAG/data.csv' #directories
-        temp_root = './data/ACE/MAG/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            version = MAG_version(date)
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/mag/level_2_cdaweb/mfi_h1/{date[:4]}/ac_h1_mfi_{date}_{version}.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
+        try:
+            csv_file = './data/ACE/MAG/data.csv' #directories
+            temp_root = './data/ACE/MAG/temp' 
+            os.makedirs(temp_root) #create folder
+            phy_obs = ['Magnitude', 'BGSM', 'SC_pos_GSM', 'dBrms', 'BGSEc','SC_pos_GSE']
+            variables = ['Epoch'] + phy_obs
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                version = MAG_version(date)
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/mag/level_2_cdaweb/mfi_h0/{date[:4]}/ac_h0_mfi_{date}_{version}.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
 
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
+                data_columns = []
 
-                csv_writer.writerow(variables)
+                for var in phy_obs:
+                    data_columns.append(cdf_file[var][:])
 
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch') #change
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, index_col = 'Epoch')
         return df
     def SWEPAM(self, scrap_date):
         csv_file = './data/ACE/SWEPAM/data.csv' #directories
-        temp_root = './data/ACE/SWEPAM/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            version = SWEPAM_version(date)
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/swepam/level_2_cdaweb/swe_h0/{date[:4]}/ac_h0_swe_{date}_{version}.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
+        try:
+            os.makedirs(temp_root) #create folder
+            temp_root = './data/ACE/SWEPAM/temp' 
+            phy_obs = ['Np', 'Vp','Tpr','alpha_ratio', 'V_GSE', 'V_GSM'] #variables#change
+            variables = ['Epoch'] + phy_obs
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                version = SWEPAM_version(date)
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/swepam/level_2_cdaweb/swe_h0/{date[:4]}/ac_h0_swe_{date}_{version}.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+                data_columns = []
 
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
+                for var in phy_obs:
+                    data_columns.append(cdf_file[var][:])
 
-                csv_writer.writerow(variables)
-
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch') #change
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, index_col = 'Epoch')
         return df
     def SWICS(self, scrap_date):
         csv_file = './data/ACE/SWICS/data.csv' #directories
-        temp_root = './data/ACE/SWICS/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/swics/level_2_cdaweb/swi_h6/{date[:4]}/ac_h6_swi_{date}_v03.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
+        try:
+            os.makedirs(temp_root) #create folder
+            temp_root = './data/ACE/SWICS/temp' 
+            phy_obs = ['nH', 'vH','vthH'] #variables#change
+            variables = ['Epoch'] + phy_obs
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/swics/level_2_cdaweb/swi_h6/{date[:4]}/ac_h6_swi_{date}_v03.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+                data_columns = []
 
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
+                for var in phy_obs:
+                    data_columns.append(cdf_file[var][:])
 
-                csv_writer.writerow(variables)
-
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch') #change
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, index_col = 'Epoch')
         return df
     def EPAM(self, scrap_date):
         csv_file = './data/ACE/EPAM/data.csv' #directories
-        temp_root = './data/ACE/EPAM/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            version = EPAM_version(date)
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/epam/level_2_cdaweb/epm_h1/{date[:4]}/ac_h1_epm_{date}_{version}.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
+        try:    
+            temp_root = './data/ACE/EPAM/temp' 
+            phy_obs = ['Epoch',
+                        'P7',
+                        'P8',
+                        'DE1',
+                        'DE2',
+                        'DE3',
+                        'DE4',
+                        'W3',
+                        'W4',
+                        'W5',
+                        'W6',
+                        'W7',
+                        'W8',
+                        'E1p',
+                        'E2p',
+                        'E3p',
+                        'E4p',
+                        'FP5p',
+                        'FP6p',
+                        'FP7p',
+                        'Z2',
+                        'Z2A',
+                        'Z3',
+                        'Z4',
+                        'P1p',
+                        'P2p',
+                        'P3p',
+                        'P4p',
+                        'P5p',
+                        'P6p',
+                        'P7p',
+                        'P8p',
+                        'E4',
+                        'FP5',
+                        'FP6',
+                        'FP7'] #All available readings
+            os.makedirs(temp_root) #create folder
+            variables = ['Epoch'] + phy_obs#variables#change
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                version = EPAM_version(date)
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/epam/level_2_cdaweb/epm_h1/{date[:4]}/ac_h1_epm_{date}_{version}.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+                data_columns = []
 
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
+                for var in phy_obs:
+                    data_columns.append(cdf_file[var][:])
 
-                csv_writer.writerow(variables)
-
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch') #change
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, index_col = 'Epoch')
         return df
             
 class SOHO:
