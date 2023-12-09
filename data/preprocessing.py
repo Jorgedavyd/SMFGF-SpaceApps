@@ -19,6 +19,10 @@ import shutil
 import spacepy.pycdf as pycdf
 from math import sqrt
 
+"""
+ACE SPACECRAFT (ESA)
+"""
+
 def SIS_version(date, mode = '%Y%m%d'):
     date = datetime.strptime(date, mode)
     v5 = datetime.strptime('20141104', '%Y%m%d')
@@ -73,40 +77,6 @@ def SWEPAM_version(date, mode = '%Y%m%d'):
     else:
         return 'v11'
 
-    
-def MAG_preprocessing():
-    root = './data/ACE/MAG'
-    csv_file = os.path.join(root, 'data.csv')
-    with open(csv_file, 'w') as csvfile:
-        csvfile.writelines('year,day,hr,min,sec,Bgse_x,Bgse_y,Bgse_z,pos_gse_x,pos_gse_y,pos_gse_z\n')
-    for file in os.listdir(root):
-        data_rows = []
-        with open(os.path.join(root, file), 'r') as txt:
-            lines = txt.readlines()
-            for line in lines[44:]:
-                data = line.split()
-                data_rows.append(data)
-        with open(csv_file, 'a') as csvfile:
-            csv_writer = csv.writer(csvfile)
-            for row in data_rows:
-                csv_writer.writerow(row)
-    df = pd.read_csv(csv_file)
-    # Convert year and day of year to a full date
-    df['date'] = pd.to_datetime(df['year'].astype(str) + df['day'].astype(str), format='%Y%j')
-    df['month'] = df['date'].dt.month
-    df['day'] = df['date'].dt.day
-    df['datetime'] = pd.to_datetime(df[['year','month', 'day', 'hr', 'min', 'sec']])
-    df.drop(['year','month', 'day', 'hr', 'min', 'sec'], axis=1, inplace=True)
-    df.set_index('datetime', drop = True, inplace = True)
-    print(df)
-    df = df.resample('5T').mean()
-    #feature engineering
-    df['Bgse_norm'] = df.apply(lambda row: sqrt(row['Bgse_x']**2+row['Bgse_y']**2+row['Bgse_z']**2))
-    return df
-
-
-
-
 
 ## https://cdaweb.gsfc.nasa.gov/cgi-bin/eval1.cgi
 class ACE:
@@ -117,14 +87,14 @@ class ACE:
             csv_file = './data/ACE/SIS/data.csv' #directories
             temp_root = './data/ACE/SIS/temp' 
             os.makedirs(temp_root) #create folder
-            ion_composition = [
+            phy_obs = [
                 'flux_He', 'flux_C', 'flux_N', 'flux_O', 'flux_Ne', 'flux_Mg',
                 'flux_Si', 'flux_S', 'flux_Ar', 'flux_Ca', 'flux_Fe',
                 'flux_Ni', 'cnt_He', 'cnt_C', 'cnt_N', 'cnt_O', 'cnt_Ne',
                 'cnt_Mg', 'cnt_Si', 'cnt_S', 'cnt_Ar', 'cnt_Ca',
                 'cnt_Fe', 'cnt_Ni'
             ]
-            variables = ['Epoch'] + [f'{name}_{i}' for name in ion_composition for i in range(1,9)]
+            variables = ['datetime'] + [f'{name}_{i}' for name in phy_obs for i in range(1,9)]
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -137,7 +107,7 @@ class ACE:
 
                 data_columns = []
 
-                for var in ion_composition:
+                for var in phy_obs:
                     data_columns.append(cdf_file[var][:])
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
@@ -148,7 +118,7 @@ class ACE:
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
-        df = pd.read_csv(csv_file, index_col = 'Epoch')
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
     def MAG(self, scrap_date):
         try:
@@ -156,7 +126,7 @@ class ACE:
             temp_root = './data/ACE/MAG/temp' 
             os.makedirs(temp_root) #create folder
             phy_obs = ['Magnitude', 'BGSM', 'SC_pos_GSM', 'dBrms', 'BGSEc','SC_pos_GSE']
-            variables = ['Epoch'] + phy_obs
+            variables = ['datetime'] + phy_obs
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -180,7 +150,7 @@ class ACE:
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
-        df = pd.read_csv(csv_file, index_col = 'Epoch')
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
     def SWEPAM(self, scrap_date):
         csv_file = './data/ACE/SWEPAM/data.csv' #directories
@@ -188,7 +158,7 @@ class ACE:
             os.makedirs(temp_root) #create folder
             temp_root = './data/ACE/SWEPAM/temp' 
             phy_obs = ['Np', 'Vp','Tpr','alpha_ratio', 'V_GSE', 'V_GSM'] #variables#change
-            variables = ['Epoch'] + phy_obs
+            variables = ['datetime'] + phy_obs
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -211,7 +181,7 @@ class ACE:
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
-        df = pd.read_csv(csv_file, index_col = 'Epoch')
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
     def SWICS(self, scrap_date):
         csv_file = './data/ACE/SWICS/data.csv' #directories
@@ -219,7 +189,7 @@ class ACE:
             os.makedirs(temp_root) #create folder
             temp_root = './data/ACE/SWICS/temp' 
             phy_obs = ['nH', 'vH','vthH'] #variables#change
-            variables = ['Epoch'] + phy_obs
+            variables = ['datetime'] + phy_obs
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -241,7 +211,7 @@ class ACE:
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
-        df = pd.read_csv(csv_file, index_col = 'Epoch')
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
     def EPAM(self, scrap_date):
         csv_file = './data/ACE/EPAM/data.csv' #directories
@@ -284,7 +254,7 @@ class ACE:
                         'FP6',
                         'FP7'] #All available readings
             os.makedirs(temp_root) #create folder
-            variables = ['Epoch'] + phy_obs#variables#change
+            variables = ['datetime'] + phy_obs#variables#change
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -307,9 +277,13 @@ class ACE:
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
-        df = pd.read_csv(csv_file, index_col = 'Epoch')
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
             
+"""
+SOHO SPACECRAFT (ESA)
+"""
+
 class SOHO:
     def __init__(self):
         pass
@@ -364,8 +338,7 @@ class SOHO:
             celias_sem['datetime'] = pd.to_datetime(celias_sem['Julian'], unit='D', origin = 'julian')
             celias_sem.set_index('datetime', drop=True,inplace=True)
             celias_sem.drop('Julian', axis = 1, inplace = True)
-            celias_resample = celias_sem.resample('5T').mean()
-            celias_resample.to_csv(csv_root)
+            celias_sem.to_csv(csv_root)
         except FileExistsError:
             pass
 
@@ -374,7 +347,7 @@ class SOHO:
     
     """CELIAS PROTON MONITOR"""
     """It has YY,MON,DY,DOY:HH:MM:SS,SPEED,Np,Vth,N/S,V_He"""
-    def CELIAS_Proton_Monitor(self, scrap_date):
+    def CELIAS_PM(self, scrap_date):
         csv_root = 'data/SOHO_L2/CELIAS_Proton_Monitor_5min/data.csv'
         years = set(date[:4] for date in scrap_date)
         month_map = {
@@ -419,13 +392,13 @@ class SOHO:
         except FileExistsError:
             pass
 
-        df = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime', date_format='%y-%m-%d %H:%M:%S').resample('5T').mean()
+        df = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime', date_format='%y-%m-%d %H:%M:%S')
 
         return df
     
     def COSTEP_EPHIN(self, scrap_date):
         #getting dates
-        years = list(set([date[:4] for date in scrap_date])) ##YYYMMDD
+        years = sorted(list(set([date[:4] for date in scrap_date]))) ##YYYMMDD
         root = './data/SOHO_L2/COSTEP_EPHIN_5min'
         csv_root = os.path.join(root, 'data.csv')
         try:
@@ -447,7 +420,7 @@ class SOHO:
             with open(csv_root, 'w') as csv_file:
                 csv_file.writelines(','.join(columns) + '\n')
 
-            for year in set([date[:4] for date in scrap_date]):
+            for year in years:
                 data_rows = []
                 filename =os.path.join(root, '5min', f'{year}.l3i')
                 with open(filename, 'r') as txt:
@@ -470,9 +443,11 @@ class SOHO:
             df.to_csv(csv_root)
         except FileExistsError:
             pass
-        costep_ephin = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime', date_format='%Y-%m-%d %H:%M:%S').resample('5T').mean()
+        costep_ephin = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime', date_format='%Y-%m-%d %H:%M:%S')
         return costep_ephin
     
+
+## other utilities
 
 def update_scrap_date(scrap_date, root): #ALWAYS USING THE SAME SCALE
     files = os.listdir(root)
