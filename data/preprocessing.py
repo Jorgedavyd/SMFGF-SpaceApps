@@ -628,7 +628,43 @@ class WIND:
             pass
         df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
+    def SMS(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/SFPD/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root) #create folder
+            angle = [
+                53,
+                0,
+                -53
+            ]
+            phy_obs = ['counts_tc_he2plus', 'counts_tc_heplus', 'counts_tc_hplus', 'counts_tc_o6plus', 'counts_tc_oplus', 'counts_tc_c5plus', 'counts_tc_fe10plus', 
+                        'dJ_tc_he2plus', 'dJ_tc_heplus', 'dJ_tc_hplus', 'dJ_tc_o6plus', 'dJ_tc_oplus', 'dJ_tc_c5plus', 'dJ_tc_fe10plus']## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_l2-3min_sms-stics-vdf-solarwind_00000000_v01.skt
+            variables = ['datetime'] + [phy_obs[i] + f'_{deg}'for i in range(len(phy_obs)) for deg in angle] #https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_l2-3min_sms-stics-vdf-solarwind_00000000_v01.skt
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_sfpd/{date[:4]}/wi_sfpd_3dp_{date}_v02.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
 
+                data_columns = []
+                for var in phy_obs:
+                    data_columns.append(np.mean(np.mean(cdf_file['DF_dc_he2plus'][:], axis = 1), axis=2))
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    
 
 """
 ACE SPACECRAFT (ESA)
