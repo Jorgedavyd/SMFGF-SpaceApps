@@ -59,15 +59,13 @@ WIND Spacecraft
 """
 
 class WIND:
-    def __init__():
-        pass
     def MAG(self, scrap_date):
         try:
             csv_file = './data/WIND/MAG/data.csv' #directories
             temp_root = './data/WIND/MAG/temp' 
             os.makedirs(temp_root) #create folder
             phy_obs = ['BF1','BGSE','BGSM']
-            variables = ['datetime', 'BF1'] + [f'{name}_{i}' for name in phy_obs[1:3] for i in range(1,4)] + ['BRMSF1']
+            variables = ['datetime', 'BF1'] + [f'{name}_{i}' for name in phy_obs[1:3] for i in range(1,4)]
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -81,9 +79,10 @@ class WIND:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
-                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:].squeeze(1)]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
@@ -98,9 +97,10 @@ class WIND:
             csv_file = './data/WIND/SWE/alpha_proton/data.csv' #directories
             temp_root = './data/WIND/SWE/temp' 
             os.makedirs(temp_root) #create folder
-            phy_obs = ['Proton_V_nonlin', 'Proton_VX_nonlin', 'Proton_VY_nonlin', 'Proton_VZ_nonlin', 'Proton_Np_nonlin', 'Proton_Np_nonlin_log', 'Alpha_V_nonlin', 'Alpha_VX_nonlin',
-                         'Alpha_VY_nonlin', 'Alpha_VZ_nonlin', 'Alpha_Na_nonlin', 'Alpha_Na_nonlin_log', 'xgse', 'ygse','zgse']
-            variables = ['datetime'] + phy_obs
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['Proton_V_nonlin', 'Proton_VX_nonlin', 'Proton_VY_nonlin', 'Proton_VZ_nonlin', 'Proton_Np_nonlin', 'Alpha_V_nonlin', 'Alpha_VX_nonlin',
+                         'Alpha_VY_nonlin', 'Alpha_VZ_nonlin', 'Alpha_Na_nonlin', 'xgse', 'ygse','zgse']
+            variables = ['datetime'] + ['Vp', 'Vpx', 'Vpy', 'Vpz', 'Np', 'Va', 'Vax', 'Vay', 'Vaz', 'Na', 'xgse', 'ygse','zgse']
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -113,7 +113,8 @@ class WIND:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -130,6 +131,7 @@ class WIND:
             csv_file = './data/WIND/SWE/electron_angle/data.csv' #directories
             temp_root = './data/WIND/SWE/temp' 
             os.makedirs(temp_root) #create folder
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['f_pitch_SPA','Ve'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h3_swe_00000000_v01.skt
             variables = ['datetime'] + [f'f_pitch_SPA_{i}' for i in range(13)] + [f'Ve_{i}' for i in range(13)]
             with open(csv_file, 'w') as file:
@@ -144,7 +146,8 @@ class WIND:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -161,6 +164,7 @@ class WIND:
             csv_file = './data/WIND/SWE/electron_moments/data.csv' #directories
             temp_root = './data/WIND/SWE/temp' 
             os.makedirs(temp_root) #create folder
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['N_elec','TcElec', 'U_eGSE', 'P_eGSE', 'W_elec', 'Te_pal'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
             variables = ['datetime'] + phy_obs[:2] + [phy_obs[2] + f'_{i}' for i in range(1,4)]+ [phy_obs[3] + f'_{i}' for i in range(1,7)] + phy_obs[4:]
             with open(csv_file, 'w') as file:
@@ -175,7 +179,8 @@ class WIND:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -192,6 +197,7 @@ class WIND:
             csv_file = './data/WIND/TDP/PM/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root) #create folder
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['P_VELS', 'P_TEMP','P_DENS','A_VELS','A_TEMP','A_DENS'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
             variables = ['datetime', 'Vpx','Vpy','Vpz', 'Tp','Np','Vax', 'Vay', 'Vaz','Ta','Na'] #GSE
             with open(csv_file, 'w') as file:
@@ -207,7 +213,8 @@ class WIND:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -223,13 +230,14 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/PLSP/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
-            phy_obs = ['FLUX', 'ENERGY', 'MOM.P.VTHERMAL', 'MOM.P.FLUX','MOM.P.PTENS', 'MOM.A.FLUX','MOM.A.VEL_PHI', 'MOM.A.VEL_TH', 'MOM.A.VEL_MAG','MOM.A.MASS', 'MOM.A.PTENS'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
-            variables = ['datetime'] + ['FLUX', 'ENERGY', 'MOM.P.VTHERMAL', 'MOM.P.FLUX','Proton_PTENS_XX', 'Proton_PTENS_YY', 'Proton_PTENS_ZZ', 'Proton_PTENS_XY', 'Proton_PTENS_XZ', 'Proton_PTENS_YZ','MOM.A.FLUX','MOM.A.VEL_PHI', 'MOM.A.VEL_TH', 'MOM.A.VEL_MAG','MOM.A.MASS', 'Alpha_PTENS_XX', 'Alpha_PTENS_YY', 'Alpha_PTENS_ZZ', 'Alpha_PTENS_XY', 'Alpha_PTENS_XZ', 'Alpha_PTENS_YZ']
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9])
+            phy_obs = ['FLUX', 'ENERGY', 'MOM.P.VTHERMAL', 'MOM.P.FLUX','MOM.P.PTENS', 'MOM.A.FLUX'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
+            variables = ['datetime'] + [f'FLUX_{i}'for i in range(1,16)]+ [f'ENERGY_{i}' for i in range(1,16)] + ['Vpt', 'Jpx', 'Jpy', 'Jpz','Pp_XX', 'Pp_YY', 'Pp_ZZ', 'Pp_XY', 'Pp_XZ', 'Pp_YZ', 'Jax', 'Jay', 'Jaz']
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
-                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_plsp/{date[:4]}/wi_plsp_3dp_{date}_v02.cdf'
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_plsp/{date[:4]}/wi_plsp_3dp_{date}_v02.cdf'#https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_sfpd_3dp_00000000_v01.skt
                 name = date + '.cdf'
                 download_url(url, temp_root, name)
                 cdf_path = os.path.join(temp_root, name)
@@ -238,7 +246,8 @@ class WIND:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -254,7 +263,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/SOSP/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['FLUX', 'ENERGY'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
             variables = ['datetime'] + [phy_obs[i] + f'_{k}' for i in range(2) for k in range(1,10)]
             with open(csv_file, 'w') as file:
@@ -269,7 +279,8 @@ class WIND:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -285,7 +296,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/SOPD/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['FLUX'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
             pitch_angles = [
                 15,
@@ -320,7 +332,8 @@ class WIND:
 
                 data_columns = []
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -336,7 +349,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/ELSP/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['FLUX', 'ENERGY'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
             energy_bands = [
                 '1113eV' ,
@@ -367,7 +381,8 @@ class WIND:
 
                 data_columns = []
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -383,7 +398,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/ELPD/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['FLUX'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_elpd_3dp_00000000_v01.skt
             pitch_angles = [
                 15,
@@ -424,7 +440,8 @@ class WIND:
 
                 data_columns = []
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -440,7 +457,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/EHSP/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['FLUX', 'ENERGY'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_ehsp_3dp_00000000_v01.skt
             energy_bands = [
                 '27660eV' ,
@@ -471,7 +489,8 @@ class WIND:
 
                 data_columns = []
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -487,7 +506,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/EHPD/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['FLUX'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_ehpd_3dp_00000000_v01.skt
             pitch_angles = [
                 15,
@@ -528,7 +548,8 @@ class WIND:
 
                 data_columns = []
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -544,7 +565,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/SFSP/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['FLUX', 'ENERGY'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
             energy_bands = [
                 '27keV', 
@@ -567,7 +589,8 @@ class WIND:
 
                 data_columns = []
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -583,7 +606,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/SFPD/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             phy_obs = ['FLUX'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_elpd_3dp_00000000_v01.skt
             pitch_angles = [
                 15,
@@ -616,7 +640,8 @@ class WIND:
 
                 data_columns = []
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -632,7 +657,8 @@ class WIND:
         try:
             csv_file = './data/WIND/TDP/SFPD/data.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
-            os.makedirs(temp_root) #create folder
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
             angle = [
                 53,
                 0,
@@ -755,7 +781,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -787,7 +814,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -818,7 +846,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -848,7 +877,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -914,7 +944,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
