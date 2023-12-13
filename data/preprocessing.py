@@ -80,8 +80,6 @@ def SWEPAM_version(date, mode = '%Y%m%d'):
 
 ## https://cdaweb.gsfc.nasa.gov/cgi-bin/eval1.cgi
 class ACE:
-    def __init__(self):
-        pass
     def SIS(self, scrap_date):
         try:
             csv_file = './data/ACE/SIS/data.csv' #directories
@@ -108,7 +106,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -126,7 +125,7 @@ class ACE:
             temp_root = './data/ACE/MAG/temp' 
             os.makedirs(temp_root) #create folder
             phy_obs = ['Magnitude', 'BGSM', 'SC_pos_GSM', 'dBrms', 'BGSEc','SC_pos_GSE']
-            variables = ['datetime'] + phy_obs
+            variables = ['datetime'] + ['Bnorm', 'BGSM_x', 'BGSM_y', 'BGSM_z', 'SC_GSM_x', 'SC_GSM_y', 'SC_GSM_z', 'dBrms', 'BGSE_x', 'BGSE_y', 'BGSE_z', 'SC_GSE_x', 'SC_GSE_y', 'SC_GSE_z']
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -140,7 +139,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -155,10 +155,10 @@ class ACE:
     def SWEPAM(self, scrap_date):
         csv_file = './data/ACE/SWEPAM/data.csv' #directories
         try:
-            os.makedirs(temp_root) #create folder
             temp_root = './data/ACE/SWEPAM/temp' 
+            os.makedirs(temp_root) #create folder
             phy_obs = ['Np', 'Vp','Tpr','alpha_ratio', 'V_GSE', 'V_GSM'] #variables#change
-            variables = ['datetime'] + phy_obs
+            variables = ['datetime'] + phy_obs[:4] + [phy_obs[i] + f'_{k}' for i in range(4,6) for k in range(1,4)]
             with open(csv_file, 'w') as file:
                 file.writelines(','.join(variables) + '\n')
             for date in scrap_date:
@@ -171,7 +171,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -186,8 +187,8 @@ class ACE:
     def SWICS(self, scrap_date):
         csv_file = './data/ACE/SWICS/data.csv' #directories
         try:
-            os.makedirs(temp_root) #create folder
             temp_root = './data/ACE/SWICS/temp' 
+            os.makedirs(temp_root) #create folder
             phy_obs = ['nH', 'vH','vthH'] #variables#change
             variables = ['datetime'] + phy_obs
             with open(csv_file, 'w') as file:
@@ -201,7 +202,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -217,7 +219,7 @@ class ACE:
         csv_file = './data/ACE/EPAM/data.csv' #directories
         try:    
             temp_root = './data/ACE/EPAM/temp' 
-            phy_obs = ['Epoch',
+            phy_obs = [
                         'P7',
                         'P8',
                         'DE1',
@@ -267,7 +269,8 @@ class ACE:
                 data_columns = []
 
                 for var in phy_obs:
-                    data_columns.append(cdf_file[var][:])
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
 
                 epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
                 data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
@@ -275,10 +278,10 @@ class ACE:
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
             shutil.rmtree(temp_root)
-        except FileExistsError:
+        except:
             pass
-        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
-        return df
+        epam = pd.read_csv(csv_file, parse_dates=['datetime'], index_col = 'datetime')
+        return epam
             
 """
 SOHO SPACECRAFT (ESA)
