@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as tt
+
 class GeoVideoCNNRNN(GeoBase):
     def __init__(self, image_model, rnn, architecture, dropout = 0.2):
         super(GeoVideoCNNRNN, self).__init__()
