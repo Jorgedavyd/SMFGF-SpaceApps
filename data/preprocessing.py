@@ -9,371 +9,624 @@ from bs4 import BeautifulSoup
 from datetime import date
 import pandas as pd
 import numpy as np
+import shutil
 
-def import_train(scrap_date):
-    os.makedirs('data/compressed', exist_ok=True)
-    os.makedirs('data/uncompressed', exist_ok=True)
-    with open('data/URLs.csv', 'r') as file:
-        lines = file.readlines()
-    url_list = []
-    for url in lines:
-        for date in scrap_date:
-            if date+'000000' in url:
-                url_list.append(url)
-    for url in url_list:
-        root = 'data/compressed'
-        filename = url.split('_')[1] + '_'+url.split('_')[3][1:-6]+'.nc.gz'
-        if filename in os.listdir(root):
-            continue
-        else:
-            download_url(url, root, filename)
+"""
+WIND Spacecraft
+"""
 
-#format: YYYYMMDD000000
-def automated_preprocessing(scrap_date: list, sep = False):
-    os.makedirs('data/compressed', exist_ok=True)
-    os.makedirs('data/uncompressed', exist_ok=True)
-    os.makedirs('data/DSCOVR_L2/faraday', exist_ok=True)
-    os.makedirs('data/DSCOVR_L1/faraday', exist_ok=True)
-    os.makedirs('data/DSCOVR_L2/magnetometer', exist_ok=True)
-    os.makedirs('data/DSCOVR_L1/magnetometer', exist_ok=True)
-    with open('data/URLs.csv', 'r') as file:
-        lines = file.readlines()
-    url_list = []
-    for url in lines:
-        for date in scrap_date:
-            if date+'000000' in url:
-                url_list.append(url)
-    for url in url_list:
-        root = 'data/compressed'
-        filename = url.split('_')[1] + '_'+url.split('_')[3][1:-6]+'.nc.gz'
-        if filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L2/faraday') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L1/faraday') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L1/magnetometer') or filename[:-6]+'.csv' in os.listdir('data/DSCOVR_L2/magnetometer'):
-            continue
-        elif filename[:-3] in os.listdir('data/uncompressed'):
-            output_file = os.path.join('data/uncompressed',filename)[:-3]
+class WIND:
+    def MAG(self, scrap_date):
+        try:
+            csv_file = './data/WIND/MAG/data.csv' #directories
+            temp_root = './data/WIND/MAG/temp' 
+            os.makedirs(temp_root) #create folder
+            phy_obs = ['BF1','BGSE','BGSM']
+            variables = ['datetime', 'BF1'] + [f'{name}_{i}' for name in phy_obs[1:3] for i in range(1,4)]
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                version = WIND_MAG_version(date)
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/mfi/mfi_h0/{date[:4]}/wi_h0_mfi_{date}_{version}.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:].squeeze(1)]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
             pass
-        else:
-            download_url(url, root, filename)
-            file = os.path.join(root,filename)
-            output_file = os.path.join('data/uncompressed',filename)[:-3]
-            with gzip.open(file, 'rb') as compressed_file:
-                    with open(output_file, 'wb') as decompressed_file:
-                        decompressed_file.write(compressed_file.read())
-            os.remove(file)
-        if 'fc1' in filename:
-            dataset = xr.open_dataset(output_file)
-
-            df = dataset.to_dataframe()
-
-            dataset.close()
-
-            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
-
-            faraday_cup = df[important_variables]
-
-            faraday_cup = faraday_cup.resample('1min').mean()
-
-            faraday_cup.to_csv(f'data/DSCOVR_L1/faraday/{filename[:-6]}.csv')
-
-            os.remove(output_file)
-
-        elif 'f1m' in filename:
-            dataset = xr.open_dataset(output_file)
-
-            df = dataset.to_dataframe()
-
-            dataset.close()
-
-            important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
-
-            faraday_cup = df[important_variables]
-
-            faraday_cup.to_csv(f'data/DSCOVR_L2/faraday/{filename[:-6]}.csv')
-            
-            os.remove(output_file)
-        elif 'm1m' in filename:
-            dataset = xr.open_dataset(output_file)
-
-            df = dataset.to_dataframe()
-
-            dataset.close()
-
-            important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
-
-            magnetometer = df[important_variables]
-
-            magnetometer.to_csv(f'data/DSCOVR_L2/magnetometer/{filename[:-6]}.csv')
-            
-            os.remove(output_file)
-        else:
-            dataset = xr.open_dataset(output_file)
-
-            df = dataset.to_dataframe()
-
-            dataset.close()
-
-            important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
-
-            magnetometer = df[important_variables]
-
-            magnetometer = magnetometer.resample('1min').mean()
-
-            magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{filename[:-6]}.csv')
-            os.remove(output_file)
-
-    start_time =scrap_date[0]
-    end_time = scrap_date[-1]
-
-    level_1, level_2 = from_csv(start_time, end_time, sep)
-
-    dst, kp = import_targets(scrap_date)
-
-    return level_1, level_2,dst, kp
-
-def from_csv(start_time, end_time, sep = False):
-    fc1_list = []
-    for file in os.listdir('data/DSCOVR_L1/faraday'):
-        file = os.path.join('data/DSCOVR_L1/faraday', file)
-        data = pd.read_csv(file, index_col=0)
-        fc1_list.append(data)
-    
-    mg1_list = []
-    for file in os.listdir('data/DSCOVR_L1/magnetometer'):
-        file = os.path.join('data/DSCOVR_L1/magnetometer', file)
-        data = pd.read_csv(file, index_col=0)
-        mg1_list.append(data)
-    
-    f1m_list = []
-    for file in os.listdir('data/DSCOVR_L2/faraday'):
-        file = os.path.join('data/DSCOVR_L2/faraday', file)
-        data = pd.read_csv(file, index_col=0)
-        f1m_list.append(data)
-    
-    m1m_list = []
-    for file in os.listdir('data/DSCOVR_L2/magnetometer'):
-        file = os.path.join('data/DSCOVR_L2/magnetometer', file)
-        data = pd.read_csv(file, index_col=0)
-        m1m_list.append(data)
-
-    fc1 = pd.concat(fc1_list)
-    mg1 = pd.concat(mg1_list)
-    f1m = pd.concat(f1m_list)
-    m1m = pd.concat(m1m_list)
-    fc1 = fc1[~fc1.index.duplicated(keep='first')]
-    mg1 = mg1[~mg1.index.duplicated(keep='first')]
-    f1m = f1m[~f1m.index.duplicated(keep='first')]
-    m1m = m1m[~m1m.index.duplicated(keep='first')]
-    fc1.index = pd.to_datetime(fc1.index)
-    mg1.index = pd.to_datetime(mg1.index)
-    f1m.index = pd.to_datetime(f1m.index)
-    m1m.index = pd.to_datetime(m1m.index)
-    start_time_ = f'{start_time[:4]}-{start_time[4:6]}-{start_time[-2:]} 00:00:00'
-    end_time_ = f'{end_time[:4]}-{end_time[4:6]}-{end_time[-2:]} 23:59:00' 
-    freq = '1T'
-    full_time_index = pd.date_range(start=start_time_, end=end_time_, freq=freq)
-    fc1 = fc1.reindex(full_time_index).interpolate(method = 'linear')
-    mg1 = mg1.reindex(full_time_index).interpolate(method = 'linear')
-    f1m = f1m.reindex(full_time_index).interpolate(method = 'linear')
-    m1m = m1m.reindex(full_time_index).interpolate(method = 'linear')
-    if sep:
-        level_1 = (fc1, mg1)
-        level_2 = (f1m, m1m)
-    else:
-        level_1 = pd.concat([fc1, mg1], axis =1)
-        level_2 = pd.concat([f1m, m1m], axis =1)
-        
-        level_1.index = pd.to_datetime(level_1.index)
-        level_2.index = pd.to_datetime(level_2.index)
-    
-    return level_1, level_2
-
-def gzip_to_nc():
-    #defining raw data dataframes
-    fc1 = []
-    mg1 = []
-    f1m = []
-    m1m = []
-
-    ##uncompress and save
-    for file in os.listdir('data/compressed'):
-        output_file = os.path.join('data/uncompressed/',file[:-3]) 
-        file = os.path.join('data/compressed/',file)
-        if output_file in os.listdir('data/uncompressed'):
-            continue
-        if 'fc1' in file:
-            fc1.append(output_file)
-        elif 'f1m' in file:
-            f1m.append(output_file)
-        elif 'm1m' in file:
-            m1m.append(output_file)
-        else:
-            mg1.append(output_file)
-        with gzip.open(file, 'rb') as compressed_file:
-            with open(output_file, 'wb') as decompressed_file:
-                decompressed_file.write(compressed_file.read())
-    return fc1, mg1, f1m, m1m
-
-def l1_faraday_preprocess(dataframes):
-    
-    data_list = []
-    
-    #cleaning data
-
-    for nc_file in dataframes: 
-
-        dataset = xr.open_dataset(nc_file)
-
-        df = dataset.to_dataframe()
-
-        important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
-
-        faraday_cup = df[important_variables]
-
-        faraday_cup = faraday_cup.resample('1min').mean()
-
-        faraday_cup.to_csv(f'data/DSCOVR_L1/faraday/{nc_file[-3]}.csv')
-
-        data_list.append(faraday_cup)
-    return pd.concat(data_list)
-
-def l1_magnet_preprocess(dataframes):
-    
-    data_list = []
-
-    for nc_file in dataframes:
-        dataset = xr.open_dataset(nc_file)
-
-        df = dataset.to_dataframe()
-
-        important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
-
-        magnetometer = df[important_variables]
-
-        magnetometer = magnetometer.resample('1min').mean()
-
-        magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{nc_file[-3]}.csv')
-        data_list.append(magnetometer)
-    return pd.concat(data_list)
-
-def l2_faraday_preprocess(dataframes):
-    
-    data_list = []
-    
-    #cleaning data
-
-    for nc_file in dataframes: 
-
-        dataset = xr.open_dataset(nc_file)
-
-        df = dataset.to_dataframe()
-
-        important_variables = ['proton_vx_gse', 'proton_vy_gse', 'proton_vz_gse', 'proton_vx_gsm', 'proton_vy_gsm', 'proton_vz_gsm', 'proton_speed', 'proton_density', 'proton_temperature']
-
-        faraday_cup = df[important_variables]
-        faraday_cup.to_csv(f'data/DSCOVR_L2/faraday/{nc_file[-3]}.csv')
-        data_list.append(faraday_cup)
-    return pd.concat(data_list)
-
-def l2_magnet_preprocess(dataframes):
-    
-    data_list = []
-
-    for nc_file in dataframes:
-        dataset = xr.open_dataset(nc_file)
-
-        df = dataset.to_dataframe()
-
-        important_variables = ['bt','bx_gse', 'by_gse', 'bz_gse', 'theta_gse', 'phi_gse', 'bx_gsm','by_gsm', 'bz_gsm', 'theta_gsm', 'phi_gsm']
-
-        magnetometer = df[important_variables]
-
-        magnetometer.to_csv(f'data/DSCOVR_L2/magnetometer/{nc_file[-3]}.csv')
-        
-        data_list.append(magnetometer)
-    return pd.concat(data_list)
-
-def preprocessing():
-    fc1, mg1, f1m, m1m = gzip_to_nc()
-    l1_faraday = l1_faraday_preprocess(fc1)
-    l1_magnetometer = l1_magnet_preprocess(mg1)
-    l2_faraday = l2_faraday_preprocess(f1m)
-    l2_magnetometer = l2_magnet_preprocess(m1m)
-    return pd.concat([l1_faraday, l1_magnetometer], axis =1), pd.concat([l2_faraday, l2_magnetometer], axis =1)
-
-def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
-    os.makedirs('data/Dst_index', exist_ok = True)
-    for month in months:
-        if month+'.csv' in os.listdir('data/Dst_index'):
-            continue
-        # Define the URL from the kyoto Dst dataset
-        if int(str(month)[:4])==int(date.today().year):
-            url = f'https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/{month}/index.html'
-        elif 2017<=int(str(month)[:4])<=int(date.today().year)-1:
-            url = f'https://wdc.kugi.kyoto-u.ac.jp/dst_provisional/{month}/index.html'
-        else:
-            url = f'https://wdc.kugi.kyoto-u.ac.jp/dst_final/{month}/index.html'
-        response = requests.get(url)
-
-        if response.status_code == 200:
-            data = response.text
-
-            soup = BeautifulSoup(data, 'html.parser')
-            data = soup.find('pre', class_='data')
-            with open('data/Dst_index/'+ url.split('/')[-2]+'.csv', 'w') as file:
-                file.write('\n'.join(data.text.replace('\n\n', '\n').replace('\n ','\n').split('\n')[7:39]).replace('-', ' -').replace('   ', ' ').replace('  ', ' ').replace(' ', ','))
-        else:
-            print('Unable to access the site')
-
-
-def interval_time(start_date_str, end_date_str):
-    start_date = datetime.strptime(start_date_str, "%Y%m%d")
-    end_date = datetime.strptime(end_date_str, "%Y%m%d")
-
-    current_date = start_date
-    date_list = []
-
-    while current_date <= end_date:
-        date_list.append(current_date.strftime("%Y%m%d"))
-        current_date += timedelta(days=1)
-
-    return date_list
-#format: month: YYYYMM day: D for < 10 and DD for > 10.
-
-def day_Dst(interval_time):
-    data_list = []
-    for day in interval_time:
-        today_dst = pd.read_csv(f'data/Dst_index/{day[:6]}.csv',index_col = 0, header = None).T[int(day[6:])]
-        for i,k in enumerate(today_dst):
-            if isinstance(k, str): 
-                today_dst[i+1] = float(today_dst[i+1])
-            if np.abs(today_dst[i+1])>500:
-                today_dst[i+1] = np.nan
-        
-        data_list.append(today_dst)
-    series = pd.concat(data_list, axis = 0).reset_index(drop=True)
-    series.name = 'Dst'
-    return series
-def day_Kp(interval_time):
-    data_list = []
-    kp = pd.read_csv(f'data/Kp_index/data.csv',index_col = 0, header = None).T
-    for day in interval_time:
-            try:
-                today_kp = kp[day][0:8]
-            except IndexError:
-                continue
-            for i,k in enumerate(today_kp):
-                if isinstance(k, str): 
-                    if np.abs(float(today_kp[i+1][0]))>9:
-                        today_kp[i+1] = np.nan
-                if isinstance(k, (int, float)):
-                    if np.abs(today_kp[i+1])>9:
-                        today_kp[i+1] = np.nan
-            
-            data_list.append(today_kp)
-    series = pd.concat(data_list, axis = 0).reset_index(drop=True)
-    series.name = 'Kp'
-    return series
-
-def import_targets(interval_time):
-    kp = day_Kp(interval_time)
-    dst = day_Dst(interval_time)
-    return dst, kp
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def SWE_alpha_proton(self, scrap_date): #includes spacecraft position
+        try:
+            csv_file = './data/WIND/SWE/alpha_proton/data.csv' #directories
+            temp_root = './data/WIND/SWE/temp' 
+            os.makedirs(temp_root) #create folder
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['Proton_V_nonlin', 'Proton_VX_nonlin', 'Proton_VY_nonlin', 'Proton_VZ_nonlin', 'Proton_Np_nonlin', 'Alpha_V_nonlin', 'Alpha_VX_nonlin',
+                         'Alpha_VY_nonlin', 'Alpha_VZ_nonlin', 'Alpha_Na_nonlin', 'xgse', 'ygse','zgse']
+            variables = ['datetime'] + ['Vp', 'Vpx', 'Vpy', 'Vpz', 'Np', 'Va', 'Vax', 'Vay', 'Vaz', 'Na', 'xgse', 'ygse','zgse']
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/swe/swe_h1/{date[:4]}/wi_h1_swe_{date}_v01.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def SWE_electron_angle(self, scrap_date):
+        try:
+            csv_file = './data/WIND/SWE/electron_angle/data.csv' #directories
+            temp_root = './data/WIND/SWE/temp' 
+            os.makedirs(temp_root) #create folder
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['f_pitch_SPA','Ve'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h3_swe_00000000_v01.skt
+            variables = ['datetime'] + [f'f_pitch_SPA_{i}' for i in range(13)] + [f'Ve_{i}' for i in range(13)]
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/swe/swe_h3/{date[:4]}/wi_h3_swe_{date}_v01.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def SWE_electron_moments(self, scrap_date):
+        try:
+            csv_file = './data/WIND/SWE/electron_moments/data.csv' #directories
+            temp_root = './data/WIND/SWE/temp' 
+            os.makedirs(temp_root) #create folder
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['N_elec','TcElec', 'U_eGSE', 'P_eGSE', 'W_elec', 'Te_pal'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
+            variables = ['datetime'] + phy_obs[:2] + [phy_obs[2] + f'_{i}' for i in range(1,4)]+ [phy_obs[3] + f'_{i}' for i in range(1,7)] + phy_obs[4:]
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/swe/swe_h5/{date[:4]}/wi_h5_swe_{date}_v01.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_PM(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/PM/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root) #create folder
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['P_VELS', 'P_TEMP','P_DENS','A_VELS','A_TEMP','A_DENS'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
+            variables = ['datetime', 'Vpx','Vpy','Vpz', 'Tp','Np','Vax', 'Vay', 'Vaz','Ta','Na'] #GSE
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                version = TDP_PM_version(date)
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_pm/{date[:4]}/wi_pm_3dp_{date}_{version}.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_PLSP(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/PLSP/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9])
+            phy_obs = ['FLUX', 'ENERGY', 'MOM.P.VTHERMAL', 'MOM.P.FLUX','MOM.P.PTENS', 'MOM.A.FLUX'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
+            variables = ['datetime'] + [f'FLUX_{i}'for i in range(1,16)]+ [f'ENERGY_{i}' for i in range(1,16)] + ['Vpt', 'Jpx', 'Jpy', 'Jpz','Pp_XX', 'Pp_YY', 'Pp_ZZ', 'Pp_XY', 'Pp_XZ', 'Pp_YZ', 'Jax', 'Jay', 'Jaz']
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_plsp/{date[:4]}/wi_plsp_3dp_{date}_v02.cdf'#https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_sfpd_3dp_00000000_v01.skt
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_SOSP(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/SOSP/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['FLUX', 'ENERGY'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
+            variables = ['datetime'] + [phy_obs[i] + f'_{k}' for i in range(2) for k in range(1,10)]
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_sosp/{date[:4]}/wi_sosp_3dp_{date}_v01.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_SOPD(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/SOPD/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = 'FLUX'## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
+            pitch_angles = [
+                15,
+                35,
+                57,
+                80,
+                102,
+                123,
+                145,
+                165
+            ]
+            energy_bands = [
+                "70keV",
+                "130keV",
+                "210keV",
+                "330keV",
+                "550keV",
+                "1000keV",
+                "2100keV",
+                "4400keV",
+                "6800keV"
+            ]
+            variables = ['datetime'] + [f'Proton_flux_{deg}_{ener}' for deg in pitch_angles for ener in energy_bands ]
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_sopd/{date[:4]}/wi_sopd_3dp_{date}_v02.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data = cdf_file[phy_obs][:]
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data  = np.concatenate([epoch, data.reshape((data.shape[0], data.shape[1]*data.shape[2]))], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_ELSP(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/ELSP/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['FLUX', 'ENERGY'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
+            energy_bands = [
+                '1113eV' ,
+                '669.2eV',
+                '426.8eV',
+                '264.8eV',
+                '165eV'  ,
+                '103.3eV',
+                '65.25eV',
+                '41.8eV' ,
+                '27.25eV',
+                '18.3eV',
+                '12.8eV',
+                '9.4eV' ,
+                '7.25eV',
+                '5.9eV' ,
+                '5.2eV' 
+            ]
+            variables = ['datetime'] + [f'electron_{phy_obs[i]}_{ener}' for i in range(2) for ener in energy_bands] #https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_elsp_3dp_00000000_v01.skt
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_elsp/{date[:4]}/wi_elsp_3dp_{date}_v01.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_ELPD(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/ELPD/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = 'FLUX' ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_elpd_3dp_00000000_v01.skt
+            pitch_angles = [
+                15,
+                35,
+                57,
+                80,
+                102,
+                123,
+                145,
+                165
+            ]
+            energy_bands = [
+                '1150eV',
+                '790eV',
+                '540eV',
+                '370eV',
+                '255eV',
+                '175eV',
+                '121eV',
+                '84eV',
+                '58eV',
+                '41eV',
+                '29eV',
+                '20.5eV',
+                '15eV',
+                '11.3eV',
+                '8.6eV'
+            ]
+            variables = ['datetime'] + [f'electron_flux_{deg}_{ener}' for deg in pitch_angles for ener in energy_bands] #https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_elsp_3dp_00000000_v01.skt
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_elpd/{date[:4]}/wi_elpd_3dp_{date}_v02.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data = cdf_file[phy_obs][:]
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data  = np.concatenate([epoch, data.reshape((data.shape[0], data.shape[1]*data.shape[2]))], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_EHSP(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/EHSP/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['FLUX', 'ENERGY'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_ehsp_3dp_00000000_v01.skt
+            energy_bands = [
+                '27660eV' ,
+                '18940eV' ,
+                '12970eV' ,
+                '8875eV'  ,
+                '6076eV'  ,
+                '4161eV'  ,
+                '2849eV'  ,
+                '1952eV'  ,
+                '1339eV'  ,
+                '920.3eV',
+                '634.4eV',
+                '432.7eV',
+                '292.0eV',
+                '200.1eV',
+                '136.8eV',
+            ]
+            variables = ['datetime'] + [f'electron_{phy_obs[i]}_{ener}' for i in range(2) for ener in energy_bands] 
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_ehsp/{date[:4]}/wi_ehsp_3dp_{date}_v02.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_EHPD(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/EHPD/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = 'FLUX' ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_ehpd_3dp_00000000_v01.skt
+            pitch_angles = [
+                15,
+                35,
+                57,
+                80,
+                102,
+                123,
+                145,
+                165
+            ]
+            energy_bands = [
+                '27660eV' ,
+                '18940eV' ,
+                '12970eV' ,
+                '8875eV'  ,
+                '6076eV'  ,
+                '4161eV'  ,
+                '2849eV'  ,
+                '1952eV'  ,
+                '1339eV'  ,
+                '920.3eV',
+                '634.4eV',
+                '432.7eV',
+                '292.0eV',
+                '200.1eV',
+                '136.8eV',
+            ]
+            variables = ['datetime'] + [f'electron_flux_{deg}_{ener}' for deg in pitch_angles for ener in energy_bands] #https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_ehpd_3dp_00000000_v01.skt
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_ehpd/{date[:4]}/wi_ehpd_3dp_{date}_v02.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data = cdf_file[phy_obs][:]
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data  = np.concatenate([epoch, data.reshape((data.shape[0], data.shape[1]*data.shape[2]))], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_SFSP(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/SFSP/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = ['FLUX', 'ENERGY'] ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_h5_swe_00000000_v01.skt
+            energy_bands = [
+                '27keV', 
+                '40keV', 
+                '86keV', 
+                '110keV',
+                '180keV',
+                '310keV',
+                '520keV'
+            ]
+            variables = ['datetime'] + [f'electron_{phy_obs[i]}_{ener}' for i in range(2) for ener in energy_bands] #https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_sfsp_3dp_00000000_v01.skt
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_sfsp/{date[:4]}/wi_sfsp_3dp_{date}_v01.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+                for var in phy_obs:
+                    cond = cdf_file[var][:].reshape(-1,1) if len(cdf_file[var][:].shape) == 1 else cdf_file[var][:]
+                    data_columns.append(cond)
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def TDP_SFPD(self, scrap_date):
+        try:
+            csv_file = './data/WIND/TDP/SFPD/data.csv' #directories
+            temp_root = './data/WIND/TDP/temp' 
+            os.makedirs(temp_root)
+            os.makedirs(csv_file[:-9]) #create folder
+            phy_obs = 'FLUX' ## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_elpd_3dp_00000000_v01.skt
+            pitch_angles = [
+                15,
+                35,
+                57,
+                80,
+                102,
+                123,
+                145,
+                165
+            ]
+            energy_bands = [
+                '27keV', 
+                '40keV', 
+                '86keV', 
+                '110keV',
+                '180keV',
+                '310keV',
+                '520keV'
+            ]
+            variables = ['datetime'] + [f'electron_flux_{deg}_{ener}' for deg in pitch_angles for ener in energy_bands] #https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_elsp_3dp_00000000_v01.skt
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/wind/3dp/3dp_sfpd/{date[:4]}/wi_sfpd_3dp_{date}_v02.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data = cdf_file[phy_obs][:]
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data  = np.concatenate([epoch, data.reshape((data.shape[0], data.shape[1]*data.shape[2]))], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
+    def SMS(self, scrap_date):
+        try:
+            csv_file = './data/WIND/SMS/data.csv' #directories
+            temp_root = './data/WIND/SMS/temp' 
+            os.makedirs(temp_root)
+            angle = [
+                53,
+                0,
+                -53
+            ]
+            phy_obs = ['counts_tc_he2plus', 'counts_tc_heplus', 'counts_tc_hplus', 'counts_tc_o6plus', 'counts_tc_oplus', 'counts_tc_c5plus', 'counts_tc_fe10plus', 
+                        'dJ_tc_he2plus', 'dJ_tc_heplus', 'dJ_tc_hplus', 'dJ_tc_o6plus', 'dJ_tc_oplus', 'dJ_tc_c5plus', 'dJ_tc_fe10plus']## metadata: https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_l2-3min_sms-stics-vdf-solarwind_00000000_v01.skt
+            variables = ['datetime'] + [phy_obs[i] + f'_{deg}'for i in range(len(phy_obs)) for deg in angle] #https://cdaweb.gsfc.nasa.gov/pub/software/cdawlib/0SKELTABLES/wi_l2-3min_sms-stics-vdf-solarwind_00000000_v01.skt
+            with open(csv_file, 'w') as file:
+                file.writelines(','.join(variables) + '\n')
+            for date in scrap_date:
+                url = f'https://cdaweb.gsfc.nasa.gov/data/wind/sms/l2/stics_cdf/3min_vdf_solarwind/{date[:4]}/wi_l2-3min_sms-stics-vdf-solarwind_{date}_v01.cdf'
+                name = date + '.cdf'
+                download_url(url, temp_root, name)
+                cdf_path = os.path.join(temp_root, name)
+                cdf_file = pycdf.CDF(cdf_path)
+
+                data_columns = []
+                for var in phy_obs:
+                    data_columns.append(np.mean(np.mean(cdf_file[var][:], axis = 1), axis=2))
+
+                epoch = np.array([str(date.strftime('%Y-%m-%d %H:%M:%S.%f')) for date in cdf_file['Epoch'][:]]).reshape(-1,1)
+                data = np.concatenate(data_columns, axis = 1, dtype =  np.float32)
+                data  = np.concatenate([epoch, data], axis = 1)
+                with open(csv_file, 'a') as file:
+                    np.savetxt(file, data, delimiter=',', fmt='%s')
+            shutil.rmtree(temp_root)
+        except FileExistsError:
+            pass
+        df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
+        return df
