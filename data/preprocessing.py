@@ -49,6 +49,9 @@ def TDP_PM_version(date, mode = '%Y%m%d'):
         return 'v05'
 
 
+
+
+
 """
 WIND Spacecraft
 """
@@ -56,7 +59,7 @@ WIND Spacecraft
 class WIND:
     def MAG(self, scrap_date):
         try:
-            csv_file = './data/WIND/MAG/data.csv' #directories
+            csv_file = f'./data/WIND/MAG/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/MAG/temp' 
             os.makedirs(temp_root) #create folder
             phy_obs = ['BF1','BGSE','BGSM']
@@ -89,7 +92,7 @@ class WIND:
         return df
     def SWE_alpha_proton(self, scrap_date): #includes spacecraft position
         try:
-            csv_file = './data/WIND/SWE/alpha_proton/data.csv' #directories
+            csv_file = f'./data/WIND/SWE/alpha_proton/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/SWE/temp' 
             os.makedirs(temp_root) #create folder
             os.makedirs(csv_file[:-9]) #create folder
@@ -123,7 +126,7 @@ class WIND:
         return df
     def SWE_electron_angle(self, scrap_date):
         try:
-            csv_file = './data/WIND/SWE/electron_angle/data.csv' #directories
+            csv_file = f'./data/WIND/SWE/electron_angle/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/SWE/temp' 
             os.makedirs(temp_root) #create folder
             os.makedirs(csv_file[:-9]) #create folder
@@ -156,7 +159,7 @@ class WIND:
         return df
     def SWE_electron_moments(self, scrap_date):
         try:
-            csv_file = './data/WIND/SWE/electron_moments/data.csv' #directories
+            csv_file = f'./data/WIND/SWE/electron_moments/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/SWE/temp' 
             os.makedirs(temp_root) #create folder
             os.makedirs(csv_file[:-9]) #create folder
@@ -189,7 +192,7 @@ class WIND:
         return df
     def TDP_PM(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/PM/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/PM/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root) #create folder
             os.makedirs(csv_file[:-9]) #create folder
@@ -223,7 +226,7 @@ class WIND:
         return df
     def TDP_PLSP(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/PLSP/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/PLSP/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9])
@@ -256,7 +259,7 @@ class WIND:
         return df
     def TDP_SOSP(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/SOSP/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/SOSP/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9]) #create folder
@@ -289,7 +292,7 @@ class WIND:
         return df
     def TDP_SOPD(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/SOPD/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/SOPD/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9]) #create folder
@@ -338,7 +341,7 @@ class WIND:
         return df
     def TDP_ELSP(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/ELSP/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/ELSP/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9]) #create folder
@@ -387,7 +390,7 @@ class WIND:
         return df
     def TDP_ELPD(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/ELPD/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/ELPD/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9]) #create folder
@@ -442,7 +445,7 @@ class WIND:
         return df
     def TDP_EHSP(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/EHSP/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/EHSP/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9]) #create folder
@@ -491,7 +494,7 @@ class WIND:
         return df
     def TDP_EHPD(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/EHPD/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/EHPD/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9]) #create folder
@@ -546,7 +549,7 @@ class WIND:
         return df
     def TDP_SFSP(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/SFSP/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/SFSP/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9]) #create folder
@@ -587,7 +590,7 @@ class WIND:
         return df
     def TDP_SFPD(self, scrap_date):
         try:
-            csv_file = './data/WIND/TDP/SFPD/data.csv' #directories
+            csv_file = f'./data/WIND/TDP/SFPD/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/TDP/temp' 
             os.makedirs(temp_root)
             os.makedirs(csv_file[:-9]) #create folder
@@ -634,7 +637,7 @@ class WIND:
         return df
     def SMS(self, scrap_date):
         try:
-            csv_file = './data/WIND/SMS/data.csv' #directories
+            csv_file = f'./data/WIND/SMS/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/WIND/SMS/temp' 
             os.makedirs(temp_root)
             angle = [
@@ -676,13 +679,13 @@ class SOHO:
     def CELIAS_SEM(self, scrap_date):
         years = set(date[:4] for date in scrap_date)
         root = 'data/SOHO_L2/CELIAS_SEM_15sec_avg'
-        csv_root = os.path.join(root, 'data.csv')
+        csv_root = os.path.join(root, f'{scrap_date[0]}_{scrap_date[-1]}.csv')
 
         try:
             url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_SEM_15sec_avg.tar.gz'
             name = 'CELIAS_SEM_15sec_avg.tar.gz'
             os.makedirs(root, exist_ok=True)
-            if 'data.csv' in os.listdir(root):
+            if f'{scrap_date[0]}_{scrap_date[-1]}.csv' in os.listdir(root):
                 raise FileExistsError
             download_url(url, root, name)
             
@@ -727,7 +730,7 @@ class SOHO:
     """CELIAS PROTON MONITOR"""
     """It has YY,MON,DY,DOY:HH:MM:SS,SPEED,Np,Vth,N/S,V_He"""
     def CELIAS_PM(self, scrap_date):
-        csv_root = 'data/SOHO_L2/CELIAS_Proton_Monitor_5min/data.csv'
+        csv_root = f'data/SOHO_L2/CELIAS_Proton_Monitor_5min/{scrap_date[0]}_{scrap_date[-1]}.csv'
         years = set(date[:4] for date in scrap_date)
         month_map = {
             'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
@@ -740,7 +743,7 @@ class SOHO:
             name = 'CELIAS_Proton_Monitor_5min.tar.gz'
             url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_Proton_Monitor_5min.tar.gz'
             os.makedirs(root, exist_ok=True)
-            if 'data.csv' in os.listdir(root):
+            if f'{scrap_date[0]}_{scrap_date[-1]}.csv' in os.listdir(root):
                 raise FileExistsError
             download_url(url, root, name)
             
@@ -779,12 +782,12 @@ class SOHO:
         #getting dates
         years = sorted(list(set([date[:4] for date in scrap_date]))) ##YYYMMDD
         root = './data/SOHO_L2/COSTEP_EPHIN_5min'
-        csv_root = os.path.join(root, 'data.csv')
+        csv_root = os.path.join(root, f'{scrap_date[0]}_{scrap_date[-1]}.csv')
         try:
             url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/COSTEP_EPHIN_L3_l3i_5min-EntireMission-ByYear.tar.gz'
             name = 'COSTEP_EPHIN_L3_l3i_5min-EntireMission-ByYear.tar.gz'
             os.makedirs(root, exist_ok=True)
-            if 'data.csv' in os.listdir(root):
+            if f'{scrap_date[0]}_{scrap_date[-1]}.csv' in os.listdir(root):
                 raise FileExistsError
             download_url(url, root, name)
             with tarfile.open(os.path.join(root, name), 'r') as tar:
@@ -888,7 +891,7 @@ def SWEPAM_version(date, mode = '%Y%m%d'):
 class ACE:
     def SIS(self, scrap_date):
         try:
-            csv_file = './data/ACE/SIS/data.csv' #directories
+            csv_file = f'./data/ACE/SIS/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/ACE/SIS/temp' 
             os.makedirs(temp_root) #create folder
             phy_obs = [
@@ -927,7 +930,7 @@ class ACE:
         return df
     def MAG(self, scrap_date):
         try:
-            csv_file = './data/ACE/MAG/data.csv' #directories
+            csv_file = f'./data/ACE/MAG/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
             temp_root = './data/ACE/MAG/temp' 
             os.makedirs(temp_root) #create folder
             phy_obs = ['Magnitude', 'BGSM', 'SC_pos_GSM', 'dBrms', 'BGSEc','SC_pos_GSE']
@@ -959,7 +962,7 @@ class ACE:
         df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
     def SWEPAM(self, scrap_date):
-        csv_file = './data/ACE/SWEPAM/data.csv' #directories
+        csv_file = f'./data/ACE/SWEPAM/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
         try:
             temp_root = './data/ACE/SWEPAM/temp' 
             os.makedirs(temp_root) #create folder
@@ -991,7 +994,7 @@ class ACE:
         df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
     def SWICS(self, scrap_date):
-        csv_file = './data/ACE/SWICS/data.csv' #directories
+        csv_file = f'./data/ACE/SWICS/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
         try:
             temp_root = './data/ACE/SWICS/temp' 
             os.makedirs(temp_root) #create folder
@@ -1022,7 +1025,7 @@ class ACE:
         df = pd.read_csv(csv_file, parse_dates=['datetime'], index_col='datetime')
         return df
     def EPAM(self, scrap_date):
-        csv_file = './data/ACE/EPAM/data.csv' #directories
+        csv_file = f'./data/ACE/EPAM/{scrap_date[0]}_{scrap_date[-1]}.csv' #directories
         try:    
             temp_root = './data/ACE/EPAM/temp' 
             phy_obs = [
@@ -1089,7 +1092,7 @@ class ACE:
         epam = pd.read_csv(csv_file, parse_dates=['datetime'], index_col = 'datetime')
         return epam
 class DSCOVR:
-    def MAGFC(self, scrap_date: list, sep = False):
+    def MAGFC(self, scrap_date: list, level = 'both'):
         os.makedirs('data/compressed', exist_ok=True)
         os.makedirs('data/uncompressed', exist_ok=True)
         os.makedirs('data/DSCOVR_L2/faraday', exist_ok=True)
@@ -1181,69 +1184,47 @@ class DSCOVR:
                 magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{filename[:-6]}.csv')
                 os.remove(output_file)
 
-        start_time =scrap_date[0]
-        end_time = scrap_date[-1]
-
-        level_1, level_2 = self.from_csv(start_time, end_time, sep)
+        level_1, level_2 = self.from_csv(scrap_date, level)
 
         return level_1, level_2
 
-    def from_csv(self, start_time, end_time, sep = False):
+    def from_csv(self, scrap_date, level = 'both'):
+        
         fc1_list = []
-        for file in os.listdir('data/DSCOVR_L1/faraday'):
-            file = os.path.join('data/DSCOVR_L1/faraday', file)
-            data = pd.read_csv(file, index_col=0)
-            fc1_list.append(data)
-        
         mg1_list = []
-        for file in os.listdir('data/DSCOVR_L1/magnetometer'):
-            file = os.path.join('data/DSCOVR_L1/magnetometer', file)
-            data = pd.read_csv(file, index_col=0)
-            mg1_list.append(data)
-        
         f1m_list = []
-        for file in os.listdir('data/DSCOVR_L2/faraday'):
-            file = os.path.join('data/DSCOVR_L2/faraday', file)
-            data = pd.read_csv(file, index_col=0)
-            f1m_list.append(data)
-        
         m1m_list = []
-        for file in os.listdir('data/DSCOVR_L2/magnetometer'):
-            file = os.path.join('data/DSCOVR_L2/magnetometer', file)
-            data = pd.read_csv(file, index_col=0)
-            m1m_list.append(data)
+        for ind_date in scrap_date:
 
-        fc1 = pd.concat(fc1_list)
-        mg1 = pd.concat(mg1_list)
+            fc1_list.append(pd.read_csv(f'./data/DSCOVR_L1/faraday/fc1_{ind_date}.csv', index_col=0))
+            mg1_list.append(pd.read_csv(f'./data/DSCOVR_L1/magnetometer/mg1_{ind_date}.csv', index_col=0))
+            f1m_list.append(pd.read_csv(f'./data/DSCOVR_L2/faraday/f1m_{ind_date}.csv', index_col=0))
+            m1m_list.append(pd.read_csv(f'./data/DSCOVR_L2/magnetometer/m1m_{ind_date}.csv', index_col=0))
+
         f1m = pd.concat(f1m_list)
         m1m = pd.concat(m1m_list)
-        fc1 = fc1[~fc1.index.duplicated(keep='first')]
-        mg1 = mg1[~mg1.index.duplicated(keep='first')]
         f1m = f1m[~f1m.index.duplicated(keep='first')]
         m1m = m1m[~m1m.index.duplicated(keep='first')]
-        fc1.index = pd.to_datetime(fc1.index)
-        mg1.index = pd.to_datetime(mg1.index)
         f1m.index = pd.to_datetime(f1m.index)
         m1m.index = pd.to_datetime(m1m.index)
-        start_time_ = f'{start_time[:4]}-{start_time[4:6]}-{start_time[-2:]} 00:00:00'
-        end_time_ = f'{end_time[:4]}-{end_time[4:6]}-{end_time[-2:]} 23:59:00' 
+        start_time_ = f'{scrap_date[0][:4]}-{scrap_date[0][4:6]}-{scrap_date[0][-2:]} 00:00:00'
+        end_time_ = f'{scrap_date[-1][:4]}-{scrap_date[-1][4:6]}-{scrap_date[-1][-2:]} 23:59:00' 
         freq = '1T'
         full_time_index = pd.date_range(start=start_time_, end=end_time_, freq=freq)
-        fc1 = fc1.reindex(full_time_index).interpolate(method = 'linear')
-        mg1 = mg1.reindex(full_time_index).interpolate(method = 'linear')
         f1m = f1m.reindex(full_time_index).interpolate(method = 'linear')
         m1m = m1m.reindex(full_time_index).interpolate(method = 'linear')
-        if sep:
-            level_1 = (fc1, mg1)
-            level_2 = (f1m, m1m)
+        if level == 'both':
+            fc1 = pd.concat(fc1_list)
+            mg1 = pd.concat(mg1_list)
+            fc1 = fc1[~fc1.index.duplicated(keep='first')]
+            mg1 = mg1[~mg1.index.duplicated(keep='first')]
+            fc1.index = pd.to_datetime(fc1.index)
+            mg1.index = pd.to_datetime(mg1.index)
+            fc1 = fc1.reindex(full_time_index).interpolate(method = 'linear')
+            mg1 = mg1.reindex(full_time_index).interpolate(method = 'linear')
+            return fc1, mg1, f1m, m1m
         else:
-            level_1 = pd.concat([fc1, mg1], axis =1)
-            level_2 = pd.concat([f1m, m1m], axis =1)
-            
-            level_1.index = pd.to_datetime(level_1.index)
-            level_2.index = pd.to_datetime(level_2.index)
-        
-        return level_1, level_2
+            return f1m, m1m
 
 def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
     os.makedirs('data/Dst_index', exist_ok = True)
