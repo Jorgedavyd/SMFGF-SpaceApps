@@ -1,452 +1,45 @@
-from torchvision.datasets.utils import download_url
-from datetime import datetime, timedelta,date
+from viresclient import SwarmRequest
 import pandas as pd
+from datetime import date, timedelta, datetime
+from bs4 import BeautifulSoup
+import numpy as np
 import os
 import requests
-from bs4 import BeautifulSoup
-from datetime import date
-import pandas as pd
-import numpy as np
-import csv
-import zipfile
-import tarfile
-from urllib.request import urlopen
-import glob
-from astropy.time import Time
-from sunpy.net import Fido, attrs as a
-import astropy.units as u
-import shutil
-import spacepy.pycdf as pycdf
 
-def SIS_version(date, mode = '%Y%m%d'):
-    date = datetime.strptime(date, mode)
-    v5 = datetime.strptime('20141104', '%Y%m%d')
-    v6 = datetime.strptime('20171019', '%Y%m%d')
-    if date<v5:
-        return 'v04'
-    elif date<v6:
-        return 'v05'
-    else:
-        return 'v06'
-
-def EPAM_version(date, mode = '%Y%m%d'):
-    date = datetime.strptime(date, mode)
-    v5 = datetime.strptime('20150101', '%Y%m%d')
-    if date<v5:
-        return 'v04'
-    else:
-        return 'v05'
-
-def MAG_version(date, mode = '%Y%m%d'):
-    date = datetime.strptime(date, mode)
-    v5 = datetime.strptime('20030328', '%Y%m%d')
-    v6 = datetime.strptime('20120630', '%Y%m%d')
-    v7 = datetime.strptime('20180130', '%Y%m%d')
-    if date<v5:
-        return 'v04'
-    elif date<v6:
-        return 'v05'
-    elif date<v7:
-        return 'v06'
-    else:
-        return 'v07'
-
-def SWEPAM_version(date, mode = '%Y%m%d'):
-    date = datetime.strptime(date, mode)
-    v7 = datetime.strptime('20031030', '%Y%m%d')
-    v8 = datetime.strptime('20050227', '%Y%m%d')
-    v9 = datetime.strptime('20050325', '%Y%m%d')
-    v10 = datetime.strptime('20061207', '%Y%m%d')
-    v11 = datetime.strptime('20130101', '%Y%m%d')
-    
-    if date<v7:
-        return 'v06'
-    elif date<v8:
-        return 'v07'
-    elif date<v9:
-        return 'v08'
-    elif date<v10:
-        return 'v09'
-    elif date<v11:
-        return 'v10'
-    else:
-        return 'v11'
-
-    
-## https://cdaweb.gsfc.nasa.gov/cgi-bin/eval1.cgi
-class ACE:
-    def __init__(self):
-        pass
-    def SIS(self, scrap_date):
-        csv_file = './data/ACE/SIS/data.csv' #directories
-        temp_root = './data/ACE/SIS/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            version = SIS_version(date)
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/sis/level_2_cdaweb/sis_h1/{date[:4]}/ac_h1_sis_{date}_{version}.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
-
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
-
-                csv_writer.writerow(variables)
-
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch')
-        return df
-    def MAG(self, scrap_date):
-        csv_file = './data/ACE/MAG/data.csv' #directories
-        temp_root = './data/ACE/MAG/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            version = MAG_version(date)
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/mag/level_2_cdaweb/mfi_h1/{date[:4]}/ac_h1_mfi_{date}_{version}.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
-
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
-
-                csv_writer.writerow(variables)
-
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch') #change
-        return df
-    def SWEPAM(self, scrap_date):
-        csv_file = './data/ACE/SWEPAM/data.csv' #directories
-        temp_root = './data/ACE/SWEPAM/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            version = SWEPAM_version(date)
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/swepam/level_2_cdaweb/swe_h0/{date[:4]}/ac_h0_swe_{date}_{version}.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
-
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
-
-                csv_writer.writerow(variables)
-
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch') #change
-        return df
-    def SWICS(self, scrap_date):
-        csv_file = './data/ACE/SWICS/data.csv' #directories
-        temp_root = './data/ACE/SWICS/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/swics/level_2_cdaweb/swi_h6/{date[:4]}/ac_h6_swi_{date}_v03.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
-
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
-
-                csv_writer.writerow(variables)
-
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch') #change
-        return df
-    def EPAM(self, scrap_date):
-        csv_file = './data/ACE/EPAM/data.csv' #directories
-        temp_root = './data/ACE/EPAM/temp' 
-        os.makedirs(temp_root) #create folder
-        variables = ['Epoch', 'Electron_hi', 'Electron_lo', 'H_lo', 'Ion_hi', 'Ion_lo', 'Ion_mid', 'Ion_very_lo'] #variables#change
-        with open(csv_file, 'w') as file:
-            file.writelines(','.join(variables) + '\n')
-        for date in scrap_date:
-            version = EPAM_version(date)
-            url = f'https://cdaweb.gsfc.nasa.gov/sp_phys/data/ace/epam/level_2_cdaweb/epm_h1/{date[:4]}/ac_h1_epm_{date}_{version}.cdf'
-            name = date + '.cdf'
-            download_url(url, temp_root, name)
-            cdf_path = os.path.join(temp_root, name)
-            cdf_file = pycdf.CDF(cdf_path)
-            variable_data = {}
-            for variable_name in variables:
-                variable_data[variable_name] = cdf_file[variable_name][...]
-
-            cdf_file.close()
-            
-            with open(csv_file, 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
-
-                csv_writer.writerow(variables)
-
-                num_rows = len(next(iter(variable_data.values())))
-
-                for i in range(num_rows):
-                    row_data = [variable_data[var][i] for var in variables]
-                    csv_writer.writerow(row_data)
-        
-        shutil.rmtree(temp_root)
-        df = pd.read_csv(csv_file, index_col = 'Epoch') #change
-        return df
-            
-class SOHO:
-    def __init__(self):
-        pass
-    """
-    SEM
-    
-    The Solar Electron and Proton Monitor (SEM) measures the energy 
-    spectrum and composition of solar and galactic cosmic rays,
-    as well as solar protons. An increase in solar proton flux can 
-    be associated with solar flares and CMEs, which can, in turn, 
-    influence geomagnetic activity.
-    """
-
-    def CELIAS_SEM(self, scrap_date):
-        years = set(date[:4] for date in scrap_date)
-        root = 'data/SOHO_L2/CELIAS_SEM_15sec_avg'
-        csv_root = os.path.join(root, 'data.csv')
-
+class SWARM:
+    def MAG_x(self, scrap_date, sc = 'A'): #spacecrafts = ['A', 'B', 'C'] #scrap_date format YYYY-MM-DD
         try:
-            url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_SEM_15sec_avg.tar.gz'
-            name = 'CELIAS_SEM_15sec_avg.tar.gz'
-            os.makedirs(root, exist_ok=True)
-            if 'data.csv' in os.listdir(root):
-                raise FileExistsError
-            download_url(url, root, name)
-            
-            with tarfile.open(os.path.join(root, name), 'r') as tar:
-                tar.extractall(root)
-            
-            with open(csv_root, 'w') as csv_file:
-                csv_file.write("Julian,F_Flux,C_Flux\n")
-
-            for year in years:
-                data_rows = []  
-                year_folder = os.path.join(root, year)
-                for day in sorted(os.listdir(year_folder)):
-                    file_path = os.path.join(year_folder, day)
-                    with open(file_path, 'r') as txt:
-                        lines = txt.readlines()[46:]  # Skip first 46 lines
-                        for line in lines:
-                            data = [line.split()[0]] + line.split()[-2:] #julian,flux
-                            data_rows.append(data)
-                
-                with open(csv_root, 'a') as csv_file:
-                    csv_writer = csv.writer(csv_file)
-                    for row in data_rows:
-                        csv_writer.writerow(row)
-
-                shutil.rmtree(year_folder)
-            
-            celias_sem = pd.read_csv(csv_root)
-            celias_sem['datetime'] = pd.to_datetime(celias_sem['Julian'], unit='D', origin = 'julian')
-            celias_sem.set_index('datetime', drop=True,inplace=True)
-            celias_sem.drop('Julian', axis = 1, inplace = True)
-            celias_resample = celias_sem.resample('5T').mean()
-            celias_resample.to_csv(csv_root)
-        except FileExistsError:
-            pass
-
-        celias_sem = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime')
-        return celias_sem
-    
-    """CELIAS PROTON MONITOR"""
-    """It has YY,MON,DY,DOY:HH:MM:SS,SPEED,Np,Vth,N/S,V_He"""
-    def CELIAS_Proton_Monitor(self, scrap_date):
-        csv_root = 'data/SOHO_L2/CELIAS_Proton_Monitor_5min/data.csv'
-        years = set(date[:4] for date in scrap_date)
-        month_map = {
-            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-            'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
-            'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-        }
-        
-        try:
-            root = 'data/SOHO_L2/CELIAS_Proton_Monitor_5min'
-            name = 'CELIAS_Proton_Monitor_5min.tar.gz'
-            url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/CELIAS_Proton_Monitor_5min.tar.gz'
-            os.makedirs(root, exist_ok=True)
-            if 'data.csv' in os.listdir(root):
-                raise FileExistsError
-            download_url(url, root, name)
-            
-            with tarfile.open(os.path.join(root, name), 'r') as tar:
-                tar.extractall(root)
-
-            with open(csv_root, 'w') as csv_file:
-                csv_file.write("datetime,SPEED,Np,Vth,N/S,V_He\n")
-
-            for year in years:
-                data_rows = []
-                filename = f'{year}_CELIAS_Proton_Monitor_5min'
-                file_path = os.path.join(root, filename + '.zip')
-                with zipfile.ZipFile(file_path, 'r') as archive:
-                    with archive.open(filename+'.txt') as txt:
-                        lines = txt.readlines() ####
-                        for line in lines[29:]:
-                            vector = [item.decode('utf-8') for item in line.split()]
-                            data = [vector[0]+'-'+month_map[vector[1]]+'-'+vector[2]+' '+':'.join(vector[3].split(':')[1:])] + vector[4:-7] #ignores the position of SOHO
-                            data_rows.append(data)
-                with open(csv_root, 'a') as csv_file:
-                    csv_writer = csv.writer(csv_file)
-                    for row in data_rows:
-                        csv_writer.writerow(row)
-
-                os.remove(file_path)
-            
-        except FileExistsError:
-            pass
-
-        df = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime', date_format='%y-%m-%d %H:%M:%S').resample('5T').mean()
-
-        return df
-    
-    def COSTEP_EPHIN(self, scrap_date):
-        #getting dates
-        years = list(set([date[:4] for date in scrap_date])) ##YYYMMDD
-        root = './data/SOHO_L2/COSTEP_EPHIN_5min'
-        csv_root = os.path.join(root, 'data.csv')
-        try:
-            url = 'https://soho.nascom.nasa.gov/data/EntireMissionBundles/COSTEP_EPHIN_L3_l3i_5min-EntireMission-ByYear.tar.gz'
-            name = 'COSTEP_EPHIN_L3_l3i_5min-EntireMission-ByYear.tar.gz'
-            os.makedirs(root, exist_ok=True)
-            if 'data.csv' in os.listdir(root):
-                raise FileExistsError
-            download_url(url, root, name)
-            with tarfile.open(os.path.join(root, name), 'r') as tar:
-                tar.extractall(root)
-            
-            columns = [
-                'year', 'month', 'day', 'hour', 'minute',
-                'int_p4', 'int_p8', 'int_p25', 'int_p41',
-                'int_h4', 'int_h8', 'int_h25', 'int_h41'
-            ]
-
-            with open(csv_root, 'w') as csv_file:
-                csv_file.writelines(','.join(columns) + '\n')
-
-            for year in set([date[:4] for date in scrap_date]):
-                data_rows = []
-                filename =os.path.join(root, '5min', f'{year}.l3i')
-                with open(filename, 'r') as txt:
-                    lines = txt.readlines()
-                    for line in lines[3:]:
-                        data = line.split()[:3] + line.split()[4:6] + line.split()[8:12] + line.split()[20:24]
-                        data = [item for item in data]
-                        data_rows.append(data)
-                with open(csv_root, 'a') as csv_file:
-                    csv_writer = csv.writer(csv_file)
-                    for row in data_rows:
-                        csv_writer.writerow(row)
-                os.remove(filename)
-            shutil.rmtree(os.path.join(root, '5min'))
-
-            df = pd.read_csv(csv_root)
-            df['datetime'] = pd.to_datetime(df[['year', 'month', 'day', 'hour', 'minute']])
-            df = df.drop(['year', 'month', 'day', 'hour', 'minute'], axis=1)  
-            df.set_index('datetime', inplace=True, drop = True)
-            df.to_csv(csv_root)
-        except FileExistsError:
-            pass
-        costep_ephin = pd.read_csv(csv_root, parse_dates=['datetime'], index_col='datetime', date_format='%Y-%m-%d %H:%M:%S').resample('5T').mean()
-        return costep_ephin
-    
-
-def update_scrap_date(scrap_date, root): #ALWAYS USING THE SAME SCALE
-    files = os.listdir(root)
-    for idx, day in enumerate(scrap_date):
-        for file in files:
-            if day in file:
-                del scrap_date[idx]
-    return scrap_date
-
-
-def interval_year(start_date_str, end_date_str):
-    start_date = datetime.strptime(start_date_str, "%Y%m%d")
-    end_date = datetime.strptime(end_date_str, "%Y%m%d")
-
-    current_date = start_date
-    year_list = []
-
-    while current_date <= end_date:
-        year_list.append(str(current_date.year))  # Append the year part of the date
-        current_date += timedelta(days=365)  # Increment by one year (365 days)
-
-    return year_list
-
-def interval_time(start_date_str, end_date_str, mode = '%Y%m%d'):
-    start_date = datetime.strptime(start_date_str, mode)
-    end_date = datetime.strptime(end_date_str, mode)
-
-    current_date = start_date
-    date_list = []
-
-    while current_date <= end_date:
-        date_list.append(current_date.strftime(mode))
-        current_date += timedelta(days=1)
-    return date_list
-
-
-
+            csv_file_root = f'./data/SWARM/MAG{sc}/{scrap_date[0]}_{scrap_date[-1]}.csv'
+            mag_x = pd.read_csv(csv_file_root, parse_dates = ['Timestamp'], index_col = 'Timestamp')
+            return mag_x
+        except FileNotFoundError:
+            request = SwarmRequest()
+            # - See https://viresclient.readthedocs.io/en/latest/available_parameters.html
+            request.set_collection(f"SW_OPER_MAG{sc}_LR_1B")
+            request.set_products(
+                measurements=[
+                    'F',
+                    'dF_Sun',
+                    'B_VFM',
+                    'dB_Sun',
+                    ],
+                auxiliaries=["Dst"],
+            )
+            # Fetch data from a given time interval
+            # - Specify times as ISO-8601 strings or Python datetime
+            data = request.get_between(
+                start_time= scrap_date[0] + 'T00:00',
+                end_time= scrap_date[-1] + 'T23:59'
+            )
+            # Load the data as an xarray.Dataset
+            df = data.as_dataframe()
+            b_VFM = pd.DataFrame(df['B_VFM'].tolist(), columns=['B_VFM_1', 'B_VFM_2', 'B_VFM_3'], index = df.index)
+            dB_Sun = pd.DataFrame(df['dB_Sun'].tolist(), columns=['dB_Sun_1', 'dB_Sun_2','dB_Sun_3'], index = df.index)
+            df = pd.concat([df.drop(['B_VFM','dB_Sun','Spacecraft',], axis = 1), b_VFM, dB_Sun], axis = 1)
+            df.columns = ['Longitude', 'Dst','dF_Sun','F', 'Radius', 'Latitude', 'b_VFM_1', 'b_VFM_2', 'b_VFM_3', 'dB_Sun_1', 'dB_Sun_2','dB_Sun_3']
+            os.makedirs(f'./data/SWARM/MAG{sc}', exist_ok = True)
+            df.to_csv(csv_file_root)
+            return df 
 
 def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
     os.makedirs('data/Dst_index', exist_ok = True)
@@ -473,6 +66,20 @@ def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
             print('Unable to access the site')
 
 
+def interval_time(start_date_str, end_date_str, format = "%Y%m%d"):
+    start_date = datetime.strptime(start_date_str, format)
+    end_date = datetime.strptime(end_date_str, format)
+
+    current_date = start_date
+    date_list = []
+
+    while current_date <= end_date:
+        date_list.append(current_date.strftime(format))
+        current_date += timedelta(days=1)
+
+    return date_list
+#format: month: YYYYMM day: D for < 10 and DD for > 10.
+
 def day_Dst(interval_time):
     data_list = []
     for day in interval_time:
@@ -487,29 +94,3 @@ def day_Dst(interval_time):
     series = pd.concat(data_list, axis = 0).reset_index(drop=True)
     series.name = 'Dst'
     return series
-
-def day_Kp(interval_time):
-    data_list = []
-    kp = pd.read_csv(f'data/Kp_index/data.csv',index_col = 0, header = None).T
-    for day in interval_time:
-            try:
-                today_kp = kp[day][0:8]
-            except IndexError:
-                continue
-            for i,k in enumerate(today_kp):
-                if isinstance(k, str): 
-                    if np.abs(float(today_kp[i+1][0]))>9:
-                        today_kp[i+1] = np.nan
-                if isinstance(k, (int, float)):
-                    if np.abs(today_kp[i+1])>9:
-                        today_kp[i+1] = np.nan
-            
-            data_list.append(today_kp)
-    series = pd.concat(data_list, axis = 0).reset_index(drop=True)
-    series.name = 'Kp'
-    return series
-
-def import_targets(interval_time):
-    kp = day_Kp(interval_time)
-    dst = day_Dst(interval_time)
-    return dst, kp
