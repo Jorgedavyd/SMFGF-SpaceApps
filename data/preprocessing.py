@@ -17,6 +17,22 @@ import xarray as xr
 import gzip
 import shutil
 
+"""
+SWARM SPACECRAFT
+"""
+
+class SWARM:
+    def MAG_A(self, scrap_date):
+
+    def MAG_B(self, scrap_date):
+        
+    def MAG_C(self, scrap_date):
+        
+
+"""
+WIND Spacecraft
+"""
+
 def WIND_MAG_version(date, mode = '%Y%m%d'):
     date = datetime.strptime(date, mode)
     v4 = datetime.strptime('20230101', '%Y%m%d')
@@ -48,14 +64,6 @@ def TDP_PM_version(date, mode = '%Y%m%d'):
     else:
         return 'v05'
 
-
-
-
-
-"""
-WIND Spacecraft
-"""
-
 class WIND:
     def MAG(self, scrap_date):
         try:
@@ -85,6 +93,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -119,6 +128,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -152,6 +162,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -185,6 +196,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -219,6 +231,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -252,6 +265,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -285,6 +299,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -334,6 +349,7 @@ class WIND:
                 data  = np.concatenate([epoch, data.reshape((data.shape[0], data.shape[1]*data.shape[2]))], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -383,6 +399,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -438,6 +455,7 @@ class WIND:
                 data  = np.concatenate([epoch, data.reshape((data.shape[0], data.shape[1]*data.shape[2]))], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -487,6 +505,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -542,6 +561,7 @@ class WIND:
                 data  = np.concatenate([epoch, data.reshape((data.shape[0], data.shape[1]*data.shape[2]))], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -583,6 +603,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -630,6 +651,7 @@ class WIND:
                 data  = np.concatenate([epoch, data.reshape((data.shape[0], data.shape[1]*data.shape[2]))], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -666,6 +688,7 @@ class WIND:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -923,6 +946,7 @@ class ACE:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -956,6 +980,7 @@ class ACE:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -988,6 +1013,7 @@ class ACE:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -1019,6 +1045,7 @@ class ACE:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except FileExistsError:
             pass
@@ -1086,11 +1113,16 @@ class ACE:
                 data  = np.concatenate([epoch, data], axis = 1)
                 with open(csv_file, 'a') as file:
                     np.savetxt(file, data, delimiter=',', fmt='%s')
+                cdf_file.close()
             shutil.rmtree(temp_root)
         except:
             pass
         epam = pd.read_csv(csv_file, parse_dates=['datetime'], index_col = 'datetime')
         return epam
+    
+"""
+DSCOVR Spacecraft
+"""
 class DSCOVR:
     def MAGFC(self, scrap_date: list, level = 'both'):
         os.makedirs('data/compressed', exist_ok=True)
