@@ -11,6 +11,7 @@ class SWARM:
         try:
             csv_file_root = f'./data/SWARM/MAG{sc}/{scrap_date[0]}_{scrap_date[-1]}.csv'
             mag_x = pd.read_csv(csv_file_root, parse_dates = ['Timestamp'], index_col = 'Timestamp')
+            mag_x.index = pd.to_datetime(mag_x.index)
             return mag_x
         except FileNotFoundError:
             request = SwarmRequest()
@@ -31,13 +32,48 @@ class SWARM:
                 start_time= scrap_date[0] + 'T00:00',
                 end_time= scrap_date[-1] + 'T23:59'
             )
-            # Load the data as an xarray.Dataset
             df = data.as_dataframe()
             b_VFM = pd.DataFrame(df['B_VFM'].tolist(), columns=['B_VFM_1', 'B_VFM_2', 'B_VFM_3'], index = df.index)
             dB_Sun = pd.DataFrame(df['dB_Sun'].tolist(), columns=['dB_Sun_1', 'dB_Sun_2','dB_Sun_3'], index = df.index)
-            df = pd.concat([df.drop(['B_VFM','dB_Sun','Spacecraft',], axis = 1), b_VFM, dB_Sun], axis = 1)
+            df = pd.concat([df.drop(['B_VFM','dB_Sun','Spacecraft',], axis = 1), b_VFM, dB_Sun], axis = 1).resample('5T').mean(skipna = True)
             df.columns = ['Longitude', 'Dst','dF_Sun','F', 'Radius', 'Latitude', 'b_VFM_1', 'b_VFM_2', 'b_VFM_3', 'dB_Sun_1', 'dB_Sun_2','dB_Sun_3']
             os.makedirs(f'./data/SWARM/MAG{sc}', exist_ok = True)
+            df.to_csv(csv_file_root)
+            return df 
+    def ION_x(self, scrap_date, sc = 'A'): #spacecrafts = ['A', 'B', 'C'] #scrap_date format YYYY-MM-DD
+        try:
+            csv_file_root = f'./data/SWARM/ion_plasma_{sc}/{scrap_date[0]}_{scrap_date[-1]}.csv'
+            ion_x = pd.read_csv(csv_file_root, parse_dates = ['Timestamp'], index_col = 'Timestamp')
+            return ion_x
+        except FileNotFoundError:
+            par_dict = {
+                'Electric field instrument (Langmuir probe measurements at 2Hz)': [f"SW_OPER_EFI{sc}_LP_1B", ['Ne', 'Te', 'Vs','U_orbit']], #collection, measurements, 
+                '16Hz cross-track ion flows': [f'SW_EXPT_EFI{sc}_TCT16', ['Ehx','Ehy','Ehz','Vicrx','Vicry','Vicrz']], 
+                'Estimates of the ion temperatures': [f'SW_OPER_EFI{sc}TIE_2_',['Tn_msis', 'Ti_meas_drift']],
+                '2Hz ion drift velocities and effective masses (SLIDEM project)': [f'SW_PREL_EFI{sc}IDM_2_', ['V_i','N_i', 'M_i_eff']]
+            }
+            df_list = []
+            for parameters in par_dict.values():
+                request = SwarmRequest()
+                # - See https://viresclient.readthedocs.io/en/latest/available_parameters.html
+                request.set_collection(parameters[0])
+                request.set_products(
+                    measurements=parameters[1]
+                )
+                # Fetch data from a given time interval
+                # - Specify times as ISO-8601 strings or Python datetime
+                data = request.get_between(
+                    start_time= scrap_date[0] + 'T00:00',
+                    end_time= scrap_date[-1] + 'T23:59',
+                )
+                df = data.as_dataframe().drop(['Longitude','Spacecraft','Radius','Latitude'], axis = 1)
+                df.index = pd.to_datetime(df.index)
+                df = df.resample('5T').mean(skipna = True) ##solve quality flags 
+                df_list.append(df)
+                del request
+                del data
+            os.makedirs(f'./data/SWARM/ion_plasma_{sc}', exist_ok = True)
+            df = pd.concat(df_list, axis = 1)
             df.to_csv(csv_file_root)
             return df 
 
