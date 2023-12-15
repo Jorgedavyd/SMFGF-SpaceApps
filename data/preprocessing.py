@@ -16,19 +16,44 @@ import spacepy.pycdf as pycdf
 import xarray as xr
 import gzip
 import shutil
+from viresclient import SwarmRequest
 
 """
 SWARM SPACECRAFT
 """
 
 class SWARM:
-    def MAG_A(self, scrap_date):
-
-    def MAG_B(self, scrap_date):
+    def MAG_x(self, scrap_date, sc = 'A'): #spacecrafts = ['A', 'B', 'C'] #scrap_date formar YYYY-MM-DD
+        while True:    
+            try:
+                csv_file_root = f'./SWARM/MAG{sc}/{scrap_date[0]}_{scrap_date[-1]}.csv'
+                mag_x = pd.read_csv(csv_file_root, parse_dates = [''], index_col = '')
+                return mag_x
+            except FileNotFoundError:
+                request = SwarmRequest()
+                # - See https://viresclient.readthedocs.io/en/latest/available_parameters.html
+                request.set_collection(f"SW_OPER_MAG{sc}_LR_1B")
+                request.set_products(
+                    measurements=[
+                        'F',
+                        'dF_Sun',
+                        'B_VFM',
+                        'dB_Sun',
+                        ],
+                    auxiliaries=["Dst"],
+                )
+                # Fetch data from a given time interval
+                # - Specify times as ISO-8601 strings or Python datetime
+                data = request.get_between(
+                    start_time= scrap_date[0] + 'T00:00'
+                    end_time= scrap_date[-1] + 'T23:59'
+                )
+                # Load the data as an xarray.Dataset
+                df = data.as_dataframe()
+                b_VFM = df['B_VFM'].apply(pd.Series)
+                dB_Sun = df['dB_Sun'].apply(pd.Series)
+                pd.concat([df.drop('B_VFM','dB_Sun', axis = 1), b_VFM, dB_Sun], axis = 1).to_csv(csv_file_root)
         
-    def MAG_C(self, scrap_date):
-        
-
 """
 WIND Spacecraft
 """
