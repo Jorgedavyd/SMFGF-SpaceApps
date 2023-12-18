@@ -1,7 +1,6 @@
 from models.utils import *
 from models.df_models import *
 import torch.nn.functional as F
-from sklearn.metrics import r2_score
 from models.base import *
 class MultiHead2MultiHeadBase(GeoBase):
     def __init__(self, task = 'regression'):

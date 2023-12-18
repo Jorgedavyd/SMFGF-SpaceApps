@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torch
 
 # Base Deep Neural Network
 def  SingularLayer(input_size, output):
