@@ -27,6 +27,7 @@ class SWARM:
         try:
             csv_file_root = f'./data/SWARM/MAG{sc}/{scrap_date[0]}_{scrap_date[-1]}.csv'
             mag_x = pd.read_csv(csv_file_root, parse_dates = ['Timestamp'], index_col = 'Timestamp')
+            mag_x.index = pd.to_datetime(mag_x.index)
             return mag_x
         except FileNotFoundError:
             request = SwarmRequest()
@@ -43,19 +44,52 @@ class SWARM:
             )
             # Fetch data from a given time interval
             # - Specify times as ISO-8601 strings or Python datetime
-            data = request.get_between(
-                start_time= scrap_date[0] + 'T00:00',
-                end_time= scrap_date[-1] + 'T23:59'
-            )
-            # Load the data as an xarray.Dataset
+            data = request.get_between(start_time= scrap_date[0].isoformat(),end_time= scrap_date[-1].isoformat())
             df = data.as_dataframe()
             b_VFM = pd.DataFrame(df['B_VFM'].tolist(), columns=['B_VFM_1', 'B_VFM_2', 'B_VFM_3'], index = df.index)
             dB_Sun = pd.DataFrame(df['dB_Sun'].tolist(), columns=['dB_Sun_1', 'dB_Sun_2','dB_Sun_3'], index = df.index)
-            df = pd.concat([df.drop(['B_VFM','dB_Sun','Spacecraft',], axis = 1), b_VFM, dB_Sun], axis = 1)
+            df = pd.concat([df.drop(['B_VFM','dB_Sun','Spacecraft',], axis = 1), b_VFM, dB_Sun], axis = 1).resample('5T').mean()
             df.columns = ['Longitude', 'Dst','dF_Sun','F', 'Radius', 'Latitude', 'b_VFM_1', 'b_VFM_2', 'b_VFM_3', 'dB_Sun_1', 'dB_Sun_2','dB_Sun_3']
             os.makedirs(f'./data/SWARM/MAG{sc}', exist_ok = True)
             df.to_csv(csv_file_root)
             return df 
+    def ION_x(self, scrap_date, sc = 'A'): #spacecrafts = ['A', 'B', 'C'] #scrap_date format YYYY-MM-DD
+        try:
+            csv_file_root = f'./data/SWARM/ion_plasma_{sc}/{scrap_date[0]}_{scrap_date[-1]}.csv'
+            ion_x = pd.read_csv(csv_file_root, parse_dates = ['Timestamp'], index_col = 'Timestamp')
+            return ion_x
+        except FileNotFoundError:
+            par_dict = {
+                'Electric field instrument (Langmuir probe measurements at 2Hz)': [f"SW_OPER_EFI{sc}_LP_1B", ['Ne', 'Te', 'Vs','U_orbit']], #collection, measurements, 
+                '16Hz cross-track ion flows': [f'SW_EXPT_EFI{sc}_TCT16', ['Ehx','Ehy','Ehz','Vicrx','Vicry','Vicrz']], 
+                'Estimates of the ion temperatures': [f'SW_OPER_EFI{sc}TIE_2_',['Tn_msis', 'Ti_meas_drift']],
+                '2Hz ion drift velocities and effective masses (SLIDEM project)': [f'SW_PREL_EFI{sc}IDM_2_', ['V_i','N_i', 'M_i_eff']]
+            }
+            df_list = []
+            for parameters in par_dict.values():
+                request = SwarmRequest()
+                # - See https://viresclient.readthedocs.io/en/latest/available_parameters.html
+                request.set_collection(parameters[0])
+                request.set_products(
+                    measurements=parameters[1]
+                )
+                # Fetch data from a given time interval
+                # - Specify times as ISO-8601 strings or Python datetime
+                data = request.get_between(
+                    start_time= scrap_date[0] + 'T00:00',
+                    end_time= scrap_date[-1] + 'T23:59',
+                )
+                df = data.as_dataframe().drop(['Longitude','Spacecraft','Radius','Latitude'], axis = 1)
+                df.index = pd.to_datetime(df.index)
+                df = df.resample('5T').mean() ##solve quality flags 
+                df_list.append(df)
+                del request
+                del data
+            os.makedirs(f'./data/SWARM/ion_plasma_{sc}', exist_ok = True)
+            df = pd.concat(df_list, axis = 1)
+            df.to_csv(csv_file_root)
+            return df 
+
 """
 WIND Spacecraft
 """
@@ -1151,7 +1185,8 @@ class ACE:
 DSCOVR Spacecraft
 """
 class DSCOVR:
-    def MAGFC(self, scrap_date: list, level = 'both'):
+    def MAGFC(self, scrap_date: list, level = None):
+        scrap_date = [string.replace('-','') for string in scrap_date]
         os.makedirs('data/compressed', exist_ok=True)
         os.makedirs('data/uncompressed', exist_ok=True)
         os.makedirs('data/DSCOVR_L2/faraday', exist_ok=True)
@@ -1243,9 +1278,7 @@ class DSCOVR:
                 magnetometer.to_csv(f'data/DSCOVR_L1/magnetometer/{filename[:-6]}.csv')
                 os.remove(output_file)
 
-        level_1, level_2 = self.from_csv(scrap_date, level)
-
-        return level_1, level_2
+        return self.from_csv(scrap_date, level)
 
     def from_csv(self, scrap_date, level = 'both'):
         
@@ -1262,35 +1295,57 @@ class DSCOVR:
 
         f1m = pd.concat(f1m_list)
         m1m = pd.concat(m1m_list)
-        f1m = f1m[~f1m.index.duplicated(keep='first')]
-        m1m = m1m[~m1m.index.duplicated(keep='first')]
         f1m.index = pd.to_datetime(f1m.index)
         m1m.index = pd.to_datetime(m1m.index)
-        start_time_ = f'{scrap_date[0][:4]}-{scrap_date[0][4:6]}-{scrap_date[0][-2:]} 00:00:00'
-        end_time_ = f'{scrap_date[-1][:4]}-{scrap_date[-1][4:6]}-{scrap_date[-1][-2:]} 23:59:00' 
-        freq = '1T'
-        full_time_index = pd.date_range(start=start_time_, end=end_time_, freq=freq)
-        f1m = f1m.reindex(full_time_index).interpolate(method = 'linear')
-        m1m = m1m.reindex(full_time_index).interpolate(method = 'linear')
+        freq = '5T'
+        f1m = f1m.resample(freq).mean()
+        m1m = m1m.resample(freq).mean()
         if level == 'both':
             fc1 = pd.concat(fc1_list)
             mg1 = pd.concat(mg1_list)
-            fc1 = fc1[~fc1.index.duplicated(keep='first')]
-            mg1 = mg1[~mg1.index.duplicated(keep='first')]
             fc1.index = pd.to_datetime(fc1.index)
             mg1.index = pd.to_datetime(mg1.index)
-            fc1 = fc1.reindex(full_time_index).interpolate(method = 'linear')
-            mg1 = mg1.reindex(full_time_index).interpolate(method = 'linear')
+            fc1= f1m.resample(freq).mean()
+            mg1= m1m.resample(freq).mean()
             return fc1, mg1, f1m, m1m
         else:
             return f1m, m1m
 
-def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
-    os.makedirs('data/Dst_index', exist_ok = True)
-    for month in months:
-        if month+'.csv' in os.listdir('data/Dst_index'):
-            continue
-        # Define the URL from the kyoto Dst dataset
+def interval_time(start_date_str, end_date_str, format = "%Y%m%d"):
+    start_date = datetime.strptime(start_date_str, format)
+    end_date = datetime.strptime(end_date_str, format)
+
+    current_date = start_date
+    date_list = []
+
+    while current_date <= end_date:
+        date_list.append(current_date.strftime(format))
+        current_date += timedelta(days=1)
+
+    return date_list
+
+def Dst(scrap_date, resample_method = '5T'):
+    try:        
+        data_list = []
+        for day in scrap_date:
+            today_dst = pd.read_csv(f'data/Dst_index/{day[:6]}.csv',index_col = 0, header = None).T[int(day[6:])]
+            for i,k in enumerate(today_dst):
+                if isinstance(k, str): 
+                    today_dst[i+1] = float(today_dst[i+1])
+                if np.abs(today_dst[i+1])>500:
+                    today_dst[i+1] = np.nan
+            
+            data_list.append(today_dst)
+        series = pd.concat(data_list, axis = 0)
+
+        series.index = pd.date_range(scrap_date[0]+ ' 00:00:00', scrap_date[-1] + ' 23:59:59', freq = '1H')
+        series = series.resample(resample_method).ffill()
+        series.name = 'Dst'
+        return series
+    except FileNotFoundError:
+        os.makedirs('data/Dst_index', exist_ok = True)
+        month = day[:6]
+
         if int(str(month)[:4])==int(date.today().year):
             url = f'https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/{month}/index.html'
         elif 2017<=int(str(month)[:4])<=int(date.today().year)-1:
@@ -1306,35 +1361,6 @@ def import_Dst(months = [str(date.today()).replace('-', '')[:6]]):
             data = soup.find('pre', class_='data')
             with open('data/Dst_index/'+ url.split('/')[-2]+'.csv', 'w') as file:
                 file.write('\n'.join(data.text.replace('\n\n', '\n').replace('\n ','\n').split('\n')[7:39]).replace('-', ' -').replace('   ', ' ').replace('  ', ' ').replace(' ', ','))
+            Dst(scrap_date)
         else:
             print('Unable to access the site')
-
-
-def interval_time(start_date_str, end_date_str):
-    start_date = datetime.strptime(start_date_str, "%Y%m%d")
-    end_date = datetime.strptime(end_date_str, "%Y%m%d")
-
-    current_date = start_date
-    date_list = []
-
-    while current_date <= end_date:
-        date_list.append(current_date.strftime("%Y%m%d"))
-        current_date += timedelta(days=1)
-
-    return date_list
-#format: month: YYYYMM day: D for < 10 and DD for > 10.
-
-def day_Dst(interval_time):
-    data_list = []
-    for day in interval_time:
-        today_dst = pd.read_csv(f'data/Dst_index/{day[:6]}.csv',index_col = 0, header = None).T[int(day[6:])]
-        for i,k in enumerate(today_dst):
-            if isinstance(k, str): 
-                today_dst[i+1] = float(today_dst[i+1])
-            if np.abs(today_dst[i+1])>500:
-                today_dst[i+1] = np.nan
-        
-        data_list.append(today_dst)
-    series = pd.concat(data_list, axis = 0).reset_index(drop=True)
-    series.name = 'Dst'
-    return series
