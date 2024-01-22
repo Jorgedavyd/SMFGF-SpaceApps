@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr'] # Seguimiento del learning rate
-    
+
+@torch.no_grad()
 def r2(y_pred, y_true):
     # Calculate the mean of the true values
     mean = torch.mean(y_true)
@@ -20,10 +22,12 @@ def r2(y_pred, y_true):
     
     return r2
 
+@torch.no_grad()
 def multiclass_accuracy(predicted, target):
     _, preds = torch.max(predicted, dim=1)
     return torch.tensor(torch.sum(preds == target).item() / len(target))
 
+@torch.no_grad()
 def multiclass_precision(predicted, target):
     _, preds = torch.max(predicted, dim=1)
     correct = (preds == target).float()
@@ -32,6 +36,7 @@ def multiclass_precision(predicted, target):
     precision = true_positive / (true_positive + false_positive + 1e-7)
     return torch.tensor(precision)
 
+@torch.no_grad()
 def multiclass_recall(predicted, target):
     _, preds = torch.max(predicted, dim=1)
     correct = (preds == target).float()
@@ -40,6 +45,7 @@ def multiclass_recall(predicted, target):
     recall = true_positive / (true_positive + false_negative + 1e-7)
     return torch.tensor(recall)
 
+@torch.no_grad()
 def compute_all(predictions, targets):
     accuracy = multiclass_accuracy(predictions, targets)
     precision = multiclass_precision(predictions, targets)
@@ -51,6 +57,7 @@ class GeoBase(nn.Module):
     def __init__(self, task: str):
         super(GeoBase, self).__init__()
         self.task_type = task
+    @torch.no_grad()
     def validation_epoch_end(self, outputs):
         batch_losses = [x['val_loss'] for x in outputs]
         epoch_loss = torch.stack(batch_losses).mean()
@@ -86,7 +93,7 @@ class GeoBase(nn.Module):
             print("Epoch [{}]:\n\tlast_lr: {:.5f}\n\ttrain_loss: {:.4f}\n\tval_loss: {:.4f}\n\taccuracy: {:.4f}\n\tprecision: {:.4f}\n\trecall: {:.4f}\n\tf1_score: {:.4f}".format(
                 epoch, result['lrs'][-1], result['train_loss'], result['val_loss'],result['accuracy'], result['precision'], result['recall'], result['f1']))
         
-    
+    @torch.no_grad()
     def evaluate(self, val_loader):
         self.eval()
         outputs = [self.validation_step(batch) for batch in val_loader]
@@ -151,3 +158,4 @@ class GeoBase(nn.Module):
 
             history.append(result) # añadir a la lista el diccionario de resultados
         return history
+

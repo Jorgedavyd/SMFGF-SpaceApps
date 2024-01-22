@@ -278,18 +278,21 @@ class ResidualMultiheadAttentionGRU(nn.Module):
             self.attention_norm.append(nn.LayerNorm(input_size))
             
             # LSTM
-            self.gru_layers.append(nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers_gru, dropout=dropout, bidirectional=bidirectional, batch_first=True))
+            self.gru_layers.append(nn.GRU(input_size=input_size, hidden_size=hidden_size, dropout=dropout, bidirectional=bidirectional, batch_first=True))
             
             input_size = hidden_size*2 if bidirectional else hidden_size
         
     def forward(self, x):
+        batch_size, _, _ = x.size()
+        hn = torch.zeros(1, batch_size, self.hidden_size)
         for layer_idx in range(self.num_layers):
             attn_out, _ = self.attention_layers[layer_idx](x, x, x)
             attn_out = self.attention_norm[layer_idx](attn_out + x)
-            gru_out, hn = self.gru_layers[layer_idx](attn_out)
             if layer_idx>0:
+                gru_out, hn = self.gru_layers[layer_idx](attn_out, hn)
                 x = gru_out + x
             else:
+                gru_out, hn = self.gru_layers[layer_idx](attn_out)
                 x = gru_out
             
         return x, hn
@@ -355,3 +358,53 @@ class Sing2MultiheadAttentionGRU(SingleHead2MultiHead):
         out, _ = self.decoder(out_fc, hn_fc)
         out = self.fc(out[:,-1,:])
         return out
+    
+class RnnMultiEncoder2Decoder(GeoBase):
+    def __init__(self, encoders, decoder):
+        """
+        Specialized for SWARM 2 Dst
+        
+        Multihead for every spacecraft (3 heads) into
+        decoder to Dst.
+
+        #First Stage
+        Training Individual Heads for every spacecraft.
+
+        #Second Stage
+        Ensemble MultiheadEncoder with torch.no_grad()
+
+        let the gradient flow just through the decoder
+
+        #Third Stage
+        Let the gradient flow through all the network.
+
+        Show results
+
+        """
+        super(RnnMultiEncoder2Decoder, self).__init__('regression')
+        self.encoders = nn.ModuleList(encoders)
+        self.decoder = decoder
+    def forward(self, x):
+        #stacked context def
+        context_list = []
+        #inferencing on input tensors
+        for x_i, encoder in zip(x, self.encoders):
+            context_list.append(encoder(x_i))
+        context = torch.cat(context_list, dim = -1)
+        out = self.decoder(context)
+        return out
+    def training_step(self, batch):
+        x, y = batch
+        y_hat = self(x)
+        J = F.mse_loss(y_hat, y)
+        return J
+    @torch.no_grad()
+    def validation_step(self, batch):
+        x,y = batch
+        y_hat = self(x)
+        r2_score = r2(y_hat, y)
+        val_loss = F.mse_loss(y_hat, y)
+        return {'val_loss': val_loss, 'r2': r2_score}
+    
+        
+        

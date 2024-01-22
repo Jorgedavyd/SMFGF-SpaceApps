@@ -5,6 +5,30 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset
 from datetime import datetime
 
+#Interesting intervals to scrap from
+
+class ScrapIntervals:
+    def __init__(self):
+        self.less_for = [
+
+        ]
+        
+        self.five = [
+
+        ]
+        
+        self.six_seven = [
+
+        ]
+        
+        self.eight_nine = [
+
+        ]
+    def all(self):
+        return self.less_for + self.five + self.six_seven + self.eight_nine
+    def high_activity(self):
+        return self.six_seven + self.eight_nine
+    
 
 class LagrangeOne(Dataset):
     def __init__(self, input_seqs: list, l1_seq, step_size = timedelta(minutes = 5), output_seq = None, swarm_seq = timedelta(hours = 2), swarm_deviation = timedelta(minutes = 20)):
@@ -152,7 +176,7 @@ class FirstStageModeling(Dataset):
 
         del output
         
-        return *transformed_inputs, transformed_output
+        return transformed_inputs, transformed_output
 
 class SecondStageModeling(Dataset):
     def __init__(self, scrap_date_list, seq_len = timedelta(hours = 2), step_size = timedelta(minutes = 5), dev = timedelta(minutes = 20)):
@@ -228,7 +252,7 @@ class SecondStageModeling(Dataset):
 
         del output
         
-        return *transformed_inputs, transformed_output
+        return transformed_inputs, transformed_output
 
 class FirstOrderModel(Dataset):
     def __init__(self, scrap_date_list, dst_sl = timedelta(hours = 2), l1_sl=timedelta(days = 2), step_size = timedelta(minutes = 5), dev = timedelta(minutes = 30)):
@@ -300,7 +324,7 @@ class FirstOrderModel(Dataset):
 
         del output
         
-        return *transformed_inputs, transformed_output
+        return transformed_inputs, transformed_output
 
 class DaeDataset(Dataset):
     def __init__(self, scrap_date_list, seq_len, step_size = timedelta(minutes = 5)):
@@ -345,5 +369,5 @@ class DaeDataset(Dataset):
         for scaler, data in zip(self.input_scalers, input_seqs):
             transformed_inputs.append(torch.from_numpy(scaler.transform(data)).to(torch.float32))
 
-        return transformed_inputs,
+        return transformed_inputs
 

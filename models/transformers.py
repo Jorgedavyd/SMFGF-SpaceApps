@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from models.base import *
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout, max_len=5000):
@@ -33,8 +34,7 @@ class TransformerEncoder(nn.Module):
                 dropout=dropout,
                 batch_first=True
             ),
-            num_layers=num_layers,
-            batch_first = True
+            num_layers=num_layers
         )
 
     def forward(self, src):
@@ -72,30 +72,31 @@ class TransformerDecoder(nn.Module):
         output = self.output_projection(output)
         return output
 
-class Seq2SeqTransformer(nn.Module):
-    def __init__(self, encoder, decoder):
-        super(Seq2SeqTransformer, self).__init__()
-        self.encoder = encoder
+class TransformerMultiEncoder2Decoder(GeoBase):
+    def __init__(self, encoders, decoder):
+        super(TransformerMultiEncoder2Decoder, self).__init__()
+        self.encoders = nn.ModuleList(encoders)
         self.decoder = decoder
-
-    def forward(self, src, tgt, src_mask, tgt_mask):
-        memory = self.encoder(src, src_mask)
-        output = self.decoder(tgt, memory, tgt_mask, src_mask)
-        return output
-
-
-class MultiEncoder2Decoder(nn.Module):
-    def __init__(self, encoder_heads, decoder):
-        super(MultiEncoder2Decoder, self).__init__()
-        self.encoders = nn.ModuleList(*encoder_heads)
-        self.decoder = decoder
-    def forward(self, trg, src, tgt_mask, src_mask):
-        inputs = []
+    def forward(self, trg, src, tgt_mask = None, src_mask = None):
+        memory_list = []
         for encoder, input in zip(self.encoders, src):
-            inputs.append(encoder(input))
+            memory_list.append(encoder(input))
 
-        memory = torch.cat(inputs, dim = -1)
+        memory = torch.cat(memory_list, dim = -1)
 
         output = self.decoder(trg, memory, tgt_mask, src_mask)
 
         return output
+    def training_step(self, batch):
+        x, y = batch
+        y_hat = self(x, y) 
+        J = F.mse_loss(y_hat, y)
+        return J
+    @torch.no_grad()
+    def validation_step(self, batch):
+        x,y = batch
+        y_hat = self(x)
+        r2_score = r2(y_hat, y)
+        val_loss = F.mse_loss(y_hat, y)
+        return {'val_loss': val_loss, 'r2': r2_score}
+    
